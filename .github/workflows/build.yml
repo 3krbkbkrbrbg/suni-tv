@@ -1,0 +1,115 @@
+name: Build Famelack Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Locate APKs
+        id: apks
+        run: |
+          DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
+          echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
+
+      - name: Upload Debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: famelack-debug
+          path: ${{ steps.apks.outputs.debug_apk }}
+          retention-days: 90
+
+      - name: Upload Release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: famelack-release
+          path: ${{ steps.apks.outputs.release_apk }}
+          retention-days: 90
+
+      - name: Upload mapping files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping
+          path: |
+            app/build/outputs/mapping/release/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: famelack-release
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## Famelack Android
+
+            **Free Live TV, Radio & Webcams — worldwide.**
+
+            - 📺 **6,612** live TV channels from 167 countries
+            - 📻 **26,932** online radio stations from 218 countries
+            - 📹 **4,143** live webcams from 96 countries
+            - 🌍 Smart country picker with flag emojis
+            - 🔍 Fast search across all channels
+            - 💚 Save favorites (stored locally)
+            - 🎲 Random channel for surprise viewing
+            - 🎬 Background audio playback (lockscreen / BT / notification controls)
+            - 📺 YouTube Live sources play in-app
+            - 🛰️ HLS streams play via ExoPlayer
+
+            **No account. No ads. No tracking.**
+
+            Bundled data is sourced from the [famelack/famelack-data](https://github.com/famelack/famelack-data)
+            public dataset (CC-BY-SA) and refined from [iptv-org](https://github.com/iptv-org/iptv).

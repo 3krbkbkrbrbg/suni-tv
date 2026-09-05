@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Famelack</string>
+    <string name="app_tagline">Live TV, Radio &amp; Webcams Worldwide</string>
+
+    <string name="tab_tv">TV</string>
+    <string name="tab_radio">Radio</string>
+    <string name="tab_webcam">Webcam</string>
+    <string name="tab_favorites">Favorites</string>
+
+    <string name="search_hint">Search…</string>
+    <string name="search_countries_hint">Filter countries…</string>
+    <string name="select_country">Select a Country</string>
+    <string name="all_channels">All Channels</string>
+    <string name="no_channels">No channels available</string>
+    <string name="loading">Loading…</string>
+    <string name="error_loading">Error loading data</string>
+
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="stop">Stop</string>
+    <string name="back">Back</string>
+
+    <string name="geo_blocked">May be geo-blocked in your region</string>
+    <string name="stream_hls">HLS Stream</string>
+    <string name="stream_youtube">YouTube Live</string>
+    <string name="channel_count">%1$d channels</string>
+
+    <string name="add_favorite">Add to favorites</string>
+    <string name="remove_favorite">Remove from favorites</string>
+
+    <string name="about_title">About Famelack</string>
+    <string name="about_text">Famelack gives you free access to live TV, online radio, and live webcams from around the world. No signup, no ads, no tracking.</string>
+    <string name="data_attribution">Data sourced from famelack-data (GitHub) and iptv-org community.</string>
+
+    <string name="notification_channel_name">Playback</string>
+    <string name="notification_channel_desc">Media playback controls</string>
+
+    <string name="random_channel">Random Channel</string>
+    <string name="favorites_empty">No favorites yet. Tap the heart on any channel to add.</string>
+    <string name="copied_link">Stream link copied</string>
+</resources>
