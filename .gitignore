@@ -47,5 +47,3 @@ captures/
 .DS_Store
 Thumbs.db
 
-# Big
-app/src/main/assets/famelack_data.json.gz

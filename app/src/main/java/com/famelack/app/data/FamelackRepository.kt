@@ -27,20 +27,25 @@ class FamelackRepository(private val context: Context) {
     suspend fun ensureLoaded() = withContext(Dispatchers.IO) {
         if (root != null) return@withContext
         val start = System.currentTimeMillis()
-        context.assets.open("famelack_data.json.gz").use { fis ->
-            GZIPInputStream(fis).use { gz ->
-                BufferedReader(InputStreamReader(gz, Charsets.UTF_8)).use { reader ->
-                    val sb = StringBuilder()
-                    val buf = CharArray(16 * 1024)
-                    var n: Int
-                    while (reader.read(buf).also { n = it } > 0) {
-                        sb.append(buf, 0, n)
+        try {
+            context.assets.open("famelack_data.json.gz").use { fis ->
+                GZIPInputStream(fis).use { gz ->
+                    BufferedReader(InputStreamReader(gz, Charsets.UTF_8)).use { reader ->
+                        val sb = StringBuilder()
+                        val buf = CharArray(16 * 1024)
+                        var n: Int
+                        while (reader.read(buf).also { n = it } > 0) {
+                            sb.append(buf, 0, n)
+                        }
+                        root = JSONObject(sb.toString())
                     }
-                    root = JSONObject(sb.toString())
                 }
             }
+            Log.i(TAG, "Famelack data loaded in ${System.currentTimeMillis() - start} ms")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed loading assets famelack_data.json.gz", e)
+            root = JSONObject("{\"tv\":{\"by_country\":{},\"by_category\":{},\"meta\":{}},\"radio\":{\"by_country\":{},\"by_category\":{},\"meta\":{}},\"webcams\":{\"by_country\":{},\"by_category\":{},\"meta\":{}}}")
         }
-        Log.i(TAG, "Famelack data loaded in ${System.currentTimeMillis() - start} ms")
     }
 
     fun countriesFor(kind: MediaKind): List<CountryInfo> {
