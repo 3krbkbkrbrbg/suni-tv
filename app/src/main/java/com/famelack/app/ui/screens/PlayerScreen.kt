@@ -12,6 +12,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,23 +34,32 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.session.MediaController
 import androidx.media3.ui.PlayerView
@@ -71,6 +82,8 @@ import com.famelack.app.FamelackApp
 import com.famelack.app.data.Channel
 import com.famelack.app.data.codeToFlag
 import com.famelack.app.player.PlayerHolder
+import com.famelack.app.player.ProxyConfig
+import com.famelack.app.player.StreamQuality
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,22 +98,29 @@ fun PlayerScreen(
 
     var controller by remember { mutableStateOf<MediaController?>(PlayerHolder.get(context)) }
     var isFavorite by remember { mutableStateOf(false) }
+    var selectedQuality by remember { mutableStateOf(PlayerHolder.currentQuality) }
+    var isProxyActive by remember { mutableStateOf(ProxyConfig.isProxyEnabled) }
 
     LaunchedEffect(channel.id) {
         app.favoritesStore.ids.collect { ids -> isFavorite = channel.id in ids }
+    }
+
+    fun startPlayback() {
+        if (!channel.isYoutube && !channel.streamUrls.isNullOrEmpty()) {
+            PlayerHolder.playStream(
+                context = context,
+                url = channel.streamUrls.first(),
+                title = channel.name,
+                channel = channel
+            )
+        }
     }
 
     LaunchedEffect(channel.id) {
         PlayerHolder.bind(context) { ctrl ->
             controller = ctrl
         }
-        if (!channel.isYoutube && !channel.streamUrls.isNullOrEmpty()) {
-            PlayerHolder.playStream(
-                context = context,
-                url = channel.streamUrls.first(),
-                title = channel.name
-            )
-        }
+        startPlayback()
     }
 
     Box(
@@ -149,7 +169,6 @@ fun PlayerScreen(
             ) {
                 when {
                     channel.isYoutube && channel.youtubeId != null -> {
-                        // YouTube Live via WebChromeClient
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { ctx ->
@@ -196,7 +215,6 @@ fun PlayerScreen(
                     }
 
                     !channel.streamUrls.isNullOrEmpty() -> {
-                        // Native Media3 PlayerView for HLS / Live Stream
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { ctx ->
@@ -230,14 +248,105 @@ fun PlayerScreen(
                 }
             }
 
-            // Controls and Channel Details
+            // Controls, Quality, Proxy, and Details
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
-                // Country and Status
+                // Quality Selector (Data Saver)
+                if (!channel.isYoutube) {
+                    Text(
+                        text = "Quality / Data Saver (کاهش مصرف اینترنت)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StreamQuality.entries.forEach { q ->
+                            FilterChip(
+                                selected = selectedQuality == q,
+                                onClick = {
+                                    selectedQuality = q
+                                    PlayerHolder.setQuality(q)
+                                    startPlayback()
+                                    Toast.makeText(context, "Quality: ${q.description}", Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text(q.label) },
+                                leadingIcon = if (selectedQuality == q) {
+                                    { Icon(Icons.Filled.Speed, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Spacer(Modifier.height(14.dp))
+
+                    // Proxy Toggle Card (Bypass Restrictions)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Security,
+                                contentDescription = null,
+                                tint = if (isProxyActive) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = "Anti-Filter Proxy (پروکسی آزاد)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isProxyActive) "Active (bypasses filtering & geo-blocks)" else "Direct connection",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isProxyActive) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isProxyActive,
+                                onCheckedChange = { active ->
+                                    isProxyActive = active
+                                    ProxyConfig.isProxyEnabled = active
+                                    startPlayback()
+                                    val msg = if (active) "Proxy enabled (connecting via stream proxy)" else "Direct connection enabled"
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFF00E676),
+                                    checkedTrackColor = Color(0xFF004D40)
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                    Spacer(Modifier.height(14.dp))
+                }
+
+                // Country & Restriction Info
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -269,7 +378,7 @@ fun PlayerScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                // Action Buttons: Reconnect / External Player / Copy
+                // Action Buttons: Reconnect / External Player
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -277,11 +386,7 @@ fun PlayerScreen(
                     if (!channel.isYoutube && !channel.streamUrls.isNullOrEmpty()) {
                         FilledTonalButton(
                             onClick = {
-                                PlayerHolder.playStream(
-                                    context = context,
-                                    url = channel.streamUrls.first(),
-                                    title = channel.name
-                                )
+                                startPlayback()
                                 Toast.makeText(context, "Reconnecting...", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f)
@@ -294,8 +399,9 @@ fun PlayerScreen(
                         OutlinedButton(
                             onClick = {
                                 val url = channel.primaryUrl ?: return@OutlinedButton
+                                val effective = ProxyConfig.getEffectiveUrl(url)
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(Uri.parse(url), "video/*")
+                                    setDataAndType(Uri.parse(effective), "video/*")
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 try {
@@ -327,6 +433,7 @@ fun PlayerScreen(
 
                 // Stream URL + Copy Button
                 channel.primaryUrl?.let { streamUrl ->
+                    val effective = ProxyConfig.getEffectiveUrl(streamUrl)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -336,7 +443,7 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = streamUrl,
+                            text = effective,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -346,7 +453,7 @@ fun PlayerScreen(
                         IconButton(
                             onClick = {
                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(ClipData.newPlainText("Stream URL", streamUrl))
+                                cm.setPrimaryClip(ClipData.newPlainText("Stream URL", effective))
                                 Toast.makeText(context, "Copied stream URL", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(32.dp)

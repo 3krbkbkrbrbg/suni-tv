@@ -95,7 +95,8 @@ fun FavoritesScreen(onPlay: (Channel) -> Unit) {
                                 PlayerHolder.playStream(
                                     context = app,
                                     url = url,
-                                    title = ch.name
+                                    title = ch.name,
+                                    channel = ch
                                 )
                                 onPlay(ch)
                             }

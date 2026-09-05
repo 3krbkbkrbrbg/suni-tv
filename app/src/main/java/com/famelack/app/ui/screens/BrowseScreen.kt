@@ -147,7 +147,8 @@ fun BrowseScreen(
                                     PlayerHolder.playStream(
                                         context = FamelackApp.instance,
                                         url = url,
-                                        title = ch.name
+                                        title = ch.name,
+                                        channel = ch
                                     )
                                     onPlay(ch)
                                 }
@@ -192,7 +193,8 @@ fun BrowseScreen(
                                     PlayerHolder.playStream(
                                         context = FamelackApp.instance,
                                         url = url,
-                                        title = ch.name
+                                        title = ch.name,
+                                        channel = ch
                                     )
                                 }
                                 onPlay(ch)
@@ -254,7 +256,8 @@ fun BrowseScreen(
                                     PlayerHolder.playStream(
                                         context = FamelackApp.instance,
                                         url = url,
-                                        title = ch.name
+                                        title = ch.name,
+                                        channel = ch
                                     )
                                     onPlay(ch)
                                 }
