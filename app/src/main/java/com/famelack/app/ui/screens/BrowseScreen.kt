@@ -185,13 +185,18 @@ fun BrowseScreen(
                     onClick = {
                         val ch = repo.randomChannel(kind)
                         if (ch != null) {
-                            if (ch.isYoutube) onPlay(ch)
-                            else {
-                                PlayerHolder.playStream(
-                                    context = FamelackApp.instance,
-                                    url = ch.primaryUrl!!,
-                                    title = ch.name
-                                )
+                            if (ch.isYoutube) {
+                                onPlay(ch)
+                            } else {
+                                val url = ch.primaryUrl
+                                if (url != null) {
+                                    PlayerHolder.playStream(
+                                        context = FamelackApp.instance,
+                                        url = url,
+                                        title = ch.name,
+                                        isHls = true
+                                    )
+                                }
                                 onPlay(ch)
                             }
                         }
