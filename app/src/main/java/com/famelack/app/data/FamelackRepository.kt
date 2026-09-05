@@ -6,19 +6,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.zip.GZIPInputStream
 
 /**
- * Loads the bundled famelack_data.json.gz (≈5 MB) once and keeps it in memory.
- * Provides country lists, channels and category queries.
- *
- * Data structure:
- *   {
- *     "tv":      { "by_country": {"ir":[...57 chans...]}, "by_category": {...}, "meta": {...} },
- *     "radio":   {...},
- *     "webcams": {...}
- *   }
+ * Loads bundled Famelack data once into memory with full error resilience.
  */
 class FamelackRepository(private val context: Context) {
 
@@ -27,38 +20,65 @@ class FamelackRepository(private val context: Context) {
     suspend fun ensureLoaded() = withContext(Dispatchers.IO) {
         if (root != null) return@withContext
         val start = System.currentTimeMillis()
+        var stream: InputStream? = null
+        var isGzip = true
+
         try {
-            context.assets.open("famelack_data.json.gz").use { fis ->
-                GZIPInputStream(fis).use { gz ->
-                    BufferedReader(InputStreamReader(gz, Charsets.UTF_8)).use { reader ->
-                        val sb = StringBuilder()
-                        val buf = CharArray(16 * 1024)
-                        var n: Int
-                        while (reader.read(buf).also { n = it } > 0) {
-                            sb.append(buf, 0, n)
-                        }
-                        root = JSONObject(sb.toString())
+            val assetList = context.assets.list("") ?: emptyArray()
+            Log.d(TAG, "Assets in root: ${assetList.joinToString()}")
+
+            if (assetList.contains("famelack_data.bin")) {
+                stream = context.assets.open("famelack_data.bin")
+                isGzip = true
+            } else if (assetList.contains("famelack_data.json.gz")) {
+                stream = context.assets.open("famelack_data.json.gz")
+                isGzip = true
+            } else if (assetList.contains("famelack_data.json")) {
+                stream = context.assets.open("famelack_data.json")
+                isGzip = false
+            } else {
+                // Fallback direct attempts
+                stream = try {
+                    isGzip = true
+                    context.assets.open("famelack_data.bin")
+                } catch (_: Exception) {
+                    try {
+                        isGzip = false
+                        context.assets.open("famelack_data.json")
+                    } catch (_: Exception) {
+                        isGzip = true
+                        context.assets.open("famelack_data.json.gz")
                     }
                 }
             }
+
+            val finalStream = if (isGzip) GZIPInputStream(stream) else stream
+            BufferedReader(InputStreamReader(finalStream, Charsets.UTF_8)).use { reader ->
+                val sb = StringBuilder(2048)
+                val buf = CharArray(32 * 1024)
+                var n: Int
+                while (reader.read(buf).also { n = it } > 0) {
+                    sb.append(buf, 0, n)
+                }
+                root = JSONObject(sb.toString())
+            }
             Log.i(TAG, "Famelack data loaded in ${System.currentTimeMillis() - start} ms")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed loading assets famelack_data.json.gz", e)
-            root = JSONObject("{\"tv\":{\"by_country\":{},\"by_category\":{},\"meta\":{}},\"radio\":{\"by_country\":{},\"by_category\":{},\"meta\":{}},\"webcams\":{\"by_country\":{},\"by_category\":{},\"meta\":{}}}")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed loading assets", e)
+            root = JSONObject()
         }
     }
 
     fun countriesFor(kind: MediaKind): List<CountryInfo> {
         val r = root ?: return emptyList()
-        val meta = r.getJSONObject(kind.slug).getJSONObject("meta")
+        val meta = r.optJSONObject(kind.slug)?.optJSONObject("meta") ?: return emptyList()
         val list = mutableListOf<CountryInfo>()
         val keys = meta.keys()
         while (keys.hasNext()) {
             val code = keys.next()
-            val o = meta.getJSONObject(code)
+            val o = meta.optJSONObject(code) ?: continue
             list.add(CountryInfo.fromJson(code, o))
         }
-        // Sort: countries with channels first, then by channel count desc, then by name
         return list.sortedWith(
             compareByDescending<CountryInfo> { it.hasChannels }
                 .thenByDescending { it.channelCount }
@@ -68,34 +88,37 @@ class FamelackRepository(private val context: Context) {
 
     fun channelsByCountry(kind: MediaKind, code: String): List<Channel> {
         val r = root ?: return emptyList()
-        val arr = r.getJSONObject(kind.slug)
-            .getJSONObject("by_country")
-            .optJSONArray(code) ?: return emptyList()
-        return (0 until arr.length()).map { Channel.fromJson(arr.getJSONObject(it)) }
+        val arr = r.optJSONObject(kind.slug)
+            ?.optJSONObject("by_country")
+            ?.optJSONArray(code) ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { idx ->
+            arr.optJSONObject(idx)?.let { Channel.fromJson(it) }
+        }
     }
 
     fun channelsByCategory(kind: MediaKind, category: String): List<Channel> {
         val r = root ?: return emptyList()
-        val arr = r.getJSONObject(kind.slug)
-            .getJSONObject("by_category")
-            .optJSONArray(category) ?: return emptyList()
-        return (0 until arr.length()).map { Channel.fromJson(arr.getJSONObject(it)) }
+        val arr = r.optJSONObject(kind.slug)
+            ?.optJSONObject("by_category")
+            ?.optJSONArray(category) ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { idx ->
+            arr.optJSONObject(idx)?.let { Channel.fromJson(it) }
+        }
     }
 
     fun categoriesFor(kind: MediaKind): List<String> {
         val r = root ?: return emptyList()
-        val cats = r.getJSONObject(kind.slug).getJSONObject("by_category")
+        val cats = r.optJSONObject(kind.slug)?.optJSONObject("by_category") ?: return emptyList()
         return cats.keys().asSequence().toList().sorted()
     }
 
     fun countryByCode(kind: MediaKind, code: String): CountryInfo? {
         val r = root ?: return null
-        val meta = r.getJSONObject(kind.slug).getJSONObject("meta")
+        val meta = r.optJSONObject(kind.slug)?.optJSONObject("meta") ?: return null
         val o = meta.optJSONObject(code) ?: return null
         return CountryInfo.fromJson(code, o)
     }
 
-    /** Pick a random channel from a kind (used by the "Random" button). */
     fun randomChannel(kind: MediaKind, countryCode: String? = null): Channel? {
         return if (countryCode != null) {
             channelsByCountry(kind, countryCode).randomOrNull()
@@ -107,18 +130,18 @@ class FamelackRepository(private val context: Context) {
         }
     }
 
-    /** Search across all channels in a kind by name. */
     fun search(kind: MediaKind, query: String, limit: Int = 200): List<Channel> {
         if (query.isBlank()) return emptyList()
         val q = query.trim().lowercase()
         val out = ArrayList<Channel>(64)
-        val byCountry = root?.getJSONObject(kind.slug)?.getJSONObject("by_country") ?: return emptyList()
+        val byCountry = root?.optJSONObject(kind.slug)?.optJSONObject("by_country") ?: return emptyList()
         val keys = byCountry.keys()
         while (keys.hasNext()) {
             val code = keys.next()
-            val arr = byCountry.getJSONArray(code)
+            val arr = byCountry.optJSONArray(code) ?: continue
             for (i in 0 until arr.length()) {
-                val c = Channel.fromJson(arr.getJSONObject(i))
+                val obj = arr.optJSONObject(i) ?: continue
+                val c = Channel.fromJson(obj)
                 if (c.name.lowercase().contains(q)) {
                     out.add(c)
                     if (out.size >= limit) return out
@@ -128,11 +151,10 @@ class FamelackRepository(private val context: Context) {
         return out
     }
 
-    /** Total counts. */
     fun counts(kind: MediaKind): Int = root
-        ?.getJSONObject(kind.slug)
-        ?.getJSONObject("by_category")
-        ?.getJSONArray("all")
+        ?.optJSONObject(kind.slug)
+        ?.optJSONObject("by_category")
+        ?.optJSONArray("all")
         ?.length() ?: 0
 
     companion object { private const val TAG = "FamelackRepo" }

@@ -16,6 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:largeHeap="true"
         android:theme="@style/Theme.Famelack"
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
