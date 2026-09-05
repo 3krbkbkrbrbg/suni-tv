@@ -15,6 +15,7 @@ class FamelackApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.famelack.app.player.ProxyConfig.init(this)
         createNotificationChannel()
     }
 

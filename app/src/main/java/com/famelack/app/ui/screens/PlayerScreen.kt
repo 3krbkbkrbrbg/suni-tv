@@ -34,20 +34,19 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,6 +60,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +84,7 @@ import com.famelack.app.data.codeToFlag
 import com.famelack.app.player.PlayerHolder
 import com.famelack.app.player.ProxyConfig
 import com.famelack.app.player.StreamQuality
+import com.famelack.app.ui.components.ProxySettingsDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,6 +101,9 @@ fun PlayerScreen(
     var isFavorite by remember { mutableStateOf(false) }
     var selectedQuality by remember { mutableStateOf(PlayerHolder.currentQuality) }
     var isProxyActive by remember { mutableStateOf(ProxyConfig.isProxyEnabled) }
+    var showProxyDialog by remember { mutableStateOf(false) }
+
+    val lastError by PlayerHolder.lastErrorFlow.collectAsState()
 
     LaunchedEffect(channel.id) {
         app.favoritesStore.ids.collect { ids -> isFavorite = channel.id in ids }
@@ -144,6 +148,13 @@ fun PlayerScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showProxyDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Security,
+                            contentDescription = "Proxy Settings",
+                            tint = if (isProxyActive) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     IconButton(onClick = {
                         scope.launch { app.favoritesStore.toggle(channel.id) }
                     }) {
@@ -248,13 +259,67 @@ fun PlayerScreen(
                 }
             }
 
-            // Controls, Quality, Proxy, and Details
+            // Controls, Error Banner, Quality, Proxy, and Details
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
+                // Error Alert Banner (if stream failed)
+                lastError?.let { err ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Filled.Warning,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "خطای پخش: استریم در دسترس نیست یا فیلتر شده است",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = err,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilledTonalButton(
+                                    onClick = { showProxyDialog = true },
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(Icons.Filled.Security, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("تنظیم پروکسی", fontSize = 11.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = { startPlayback() },
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("تلاش مجدد", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Quality Selector (Data Saver)
                 if (!channel.isYoutube) {
                     Text(
@@ -296,7 +361,9 @@ fun PlayerScreen(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showProxyDialog = true }
                     ) {
                         Row(
                             modifier = Modifier
@@ -312,14 +379,27 @@ fun PlayerScreen(
                             )
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "پروکسی ضد تحریم",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        Icons.Filled.Settings,
+                                        contentDescription = "Config",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                                 Text(
-                                    text = "Anti-Filter Proxy (پروکسی آزاد)",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isProxyActive) "Active (bypasses filtering & geo-blocks)" else "Direct connection",
+                                    text = if (isProxyActive) {
+                                        "روشن (${ProxyConfig.proxyMode.label})"
+                                    } else {
+                                        "خاموش (اتصال مستقیم — برای تنظیم لمس کنید)"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (isProxyActive) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -329,8 +409,9 @@ fun PlayerScreen(
                                 onCheckedChange = { active ->
                                     isProxyActive = active
                                     ProxyConfig.isProxyEnabled = active
+                                    ProxyConfig.save(context)
                                     startPlayback()
-                                    val msg = if (active) "Proxy enabled (connecting via stream proxy)" else "Direct connection enabled"
+                                    val msg = if (active) "پروکسی فعال شد" else "اتصال مستقیم فعال شد"
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 },
                                 colors = SwitchDefaults.colors(
@@ -405,7 +486,7 @@ fun PlayerScreen(
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 try {
-                                    context.startActivity(Intent.createChooser(intent, "Play with"))
+                                    context.startActivity(Intent.createChooser(intent, "Play with (VLC/MX Player)"))
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "No external player found", Toast.LENGTH_SHORT).show()
                                 }
@@ -414,7 +495,7 @@ fun PlayerScreen(
                         ) {
                             Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("External")
+                            Text("VLC / External")
                         }
                     }
                 }
@@ -468,5 +549,15 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+
+    if (showProxyDialog) {
+        ProxySettingsDialog(
+            onDismiss = { showProxyDialog = false },
+            onSaved = {
+                isProxyActive = ProxyConfig.isProxyEnabled
+                startPlayback()
+            }
+        )
     }
 }

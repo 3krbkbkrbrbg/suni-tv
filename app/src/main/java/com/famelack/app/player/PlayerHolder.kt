@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -30,11 +31,13 @@ enum class StreamQuality(
 
 /**
  * Singleton holder for MediaController bound to [PlaybackService].
- * Manages playback, stream quality (data saver), proxy routing, and current channel state.
+ * Manages playback, stream quality (data saver), proxy routing, auto-fallback, and current channel state.
  */
 object PlayerHolder {
     private var controller: MediaController? = null
     private var isBinding: Boolean = false
+    private var appContext: Context? = null
+    private var isUsingProxyForCurrent: Boolean = false
 
     var currentQuality: StreamQuality = StreamQuality.AUTO
         private set
@@ -45,6 +48,9 @@ object PlayerHolder {
     private val _isPlayingFlow = MutableStateFlow(false)
     val isPlayingFlow: StateFlow<Boolean> = _isPlayingFlow.asStateFlow()
 
+    private val _lastErrorFlow = MutableStateFlow<String?>(null)
+    val lastErrorFlow: StateFlow<String?> = _lastErrorFlow.asStateFlow()
+
     fun get(context: Context): MediaController? = controller
 
     fun setCurrentChannel(channel: Channel?) {
@@ -52,6 +58,7 @@ object PlayerHolder {
     }
 
     fun bind(context: Context, onReady: ((MediaController) -> Unit)? = null) {
+        appContext = context.applicationContext
         val current = controller
         if (current != null && current.isConnected) {
             onReady?.invoke(current)
@@ -80,7 +87,13 @@ object PlayerHolder {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             if (playbackState == Player.STATE_ENDED || playbackState == Player.STATE_IDLE) {
                                 _isPlayingFlow.value = false
+                            } else if (playbackState == Player.STATE_READY) {
+                                _lastErrorFlow.value = null
                             }
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            onPlaybackError(error)
                         }
                     })
 
@@ -96,13 +109,20 @@ object PlayerHolder {
     }
 
     fun playStream(context: Context, url: String, title: String, channel: Channel? = null) {
+        appContext = context.applicationContext
+        _lastErrorFlow.value = null
         if (channel != null) {
             _currentChannelFlow.value = channel
         }
 
+        isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
+        val targetUrl = ProxyConfig.getEffectiveUrl(url)
+        playUrlInternal(context, targetUrl, title)
+    }
+
+    private fun playUrlInternal(context: Context, effectiveUrl: String, title: String) {
         bind(context) { c ->
             try {
-                val effectiveUrl = ProxyConfig.getEffectiveUrl(url)
                 val lowerUrl = effectiveUrl.lowercase()
                 val mimeType = when {
                     lowerUrl.contains(".m3u8") || lowerUrl.contains("m3u8") || lowerUrl.contains("/hls") -> MimeTypes.APPLICATION_M3U8
@@ -131,9 +151,26 @@ object PlayerHolder {
                 c.playWhenReady = true
                 _isPlayingFlow.value = true
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to play stream: $url", e)
+                Log.e(TAG, "Failed to play stream: $effectiveUrl", e)
+                _lastErrorFlow.value = e.localizedMessage ?: "Playback failed"
             }
         }
+    }
+
+    fun onPlaybackError(error: PlaybackException) {
+        val lastChannel = _currentChannelFlow.value
+        val ctx = appContext
+
+        if (lastChannel != null && ctx != null && isUsingProxyForCurrent && ProxyConfig.autoFallbackToDirect) {
+            Log.w(TAG, "Proxy stream failed [${error.errorCodeName}]. Falling back to direct stream...")
+            isUsingProxyForCurrent = false
+            val directUrl = lastChannel.primaryUrl ?: return
+            _lastErrorFlow.value = "Proxy failed, retrying direct..."
+            playUrlInternal(ctx, directUrl, lastChannel.name)
+            return
+        }
+
+        _lastErrorFlow.value = "Playback error: ${error.errorCodeName} (${error.message ?: "Connection dropped"})"
     }
 
     fun setQuality(quality: StreamQuality) {
@@ -174,6 +211,7 @@ object PlayerHolder {
         controller?.stop()
         _currentChannelFlow.value = null
         _isPlayingFlow.value = false
+        _lastErrorFlow.value = null
     }
 
     fun release() {
@@ -182,6 +220,7 @@ object PlayerHolder {
         isBinding = false
         _currentChannelFlow.value = null
         _isPlayingFlow.value = false
+        _lastErrorFlow.value = null
     }
 
     private const val TAG = "PlayerHolder"
