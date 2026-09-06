@@ -1,4 +1,4 @@
-name: Build Famelack Android APK
+name: Build Suni TV Android APK
 
 on:
   push:
@@ -66,14 +66,14 @@ jobs:
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: famelack-debug
+          name: suni-tv-debug
           path: ${{ steps.apks.outputs.debug_apk }}
           retention-days: 90
 
       - name: Upload Release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: famelack-release
+          name: suni-tv-release
           path: ${{ steps.apks.outputs.release_apk }}
           retention-days: 90
 
@@ -97,7 +97,7 @@ jobs:
       - name: Download Release APK
         uses: actions/download-artifact@v4
         with:
-          name: famelack-release
+          name: suni-tv-release
           path: dist/
 
       - name: Create GitHub Release
@@ -107,6 +107,19 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+          body: |
+            ## ☀️📺 Suni TV — سانی تی‌وی
+
+            **تلویزیون زنده، رادیو و وبکم‌های سراسر دنیا، رایگان و بدون تبلیغ**
+
+            - 📺 بیش از **۶,۶۰۰** کانال تلویزیونی از سراسر جهان
+            - 📻 بیش از **۲۶,۹۰۰** ایستگاه رادیویی آنلاین
+            - 📹 بیش از **۴,۱۰۰** وبکم زنده
+            - 🛡️ مجهز به پروکسی آزاد ضد تحریم و فیلتر
+            - 📱 قابلیت چرخش افقی و عمودی تصویر + تمام‌صفحه
+            - ⚡ حالت ذخیره اینترنت (Data Saver) تا ۸۵٪ کاهش مصرف
+            - 🔄 کلید بازگشت هوشمند (بدون خروج ناگهانی از برنامه)
+            - ☀️ لوگوی اختصاصی سان و تلویزیون
           body: |
             ## Famelack Android
 

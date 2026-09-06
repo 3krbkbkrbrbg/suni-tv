@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Famelack"
+rootProject.name = "SuniTV"
 include(":app")

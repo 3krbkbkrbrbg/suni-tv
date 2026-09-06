@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Famelack</string>
+    <string name="app_name">Suni TV</string>
     <string name="app_tagline">Live TV, Radio &amp; Webcams Worldwide</string>
 
     <string name="tab_tv">TV</string>
@@ -29,8 +29,8 @@
     <string name="add_favorite">Add to favorites</string>
     <string name="remove_favorite">Remove from favorites</string>
 
-    <string name="about_title">About Famelack</string>
-    <string name="about_text">Famelack gives you free access to live TV, online radio, and live webcams from around the world. No signup, no ads, no tracking.</string>
+    <string name="about_title">About Suni TV</string>
+    <string name="about_text">Suni TV gives you free access to live TV, online radio, and live webcams from around the world. No signup, no ads, no tracking.</string>
     <string name="data_attribution">Data sourced from famelack-data (GitHub) and iptv-org community.</string>
 
     <string name="notification_channel_name">Playback</string>

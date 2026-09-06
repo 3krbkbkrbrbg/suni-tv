@@ -8,11 +8,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.famelack.app"
+        applicationId = "com.sunitv.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.2.1"
+        versionCode = 14
+        versionName = "2.0.0"
         resourceConfigurations += listOf("en")
         vectorDrawables { useSupportLibrary = true }
         ndk {
