@@ -115,10 +115,10 @@ object PlayerHolder {
             _currentChannelFlow.value = channel
         }
 
-        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.AETHER_MASQUE) {
+        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN) {
             Thread {
                 kotlinx.coroutines.runBlocking {
-                    AetherManager.ensureStarted(context, ProxyConfig.aetherPort)
+                    FcaeVpnManager.start(context, ProxyConfig.fcaePort)
                 }
             }.start()
         }

@@ -13,7 +13,7 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 enum class ProxyMode(val label: String, val desc: String, val defaultPort: Int) {
-    AETHER_MASQUE("Aether MASQUE (پروکسی هوشمند)", "پروکسی آزاد MASQUE بر پایه HTTP/3 و کلودفلر (127.0.0.1:1819)", 1819),
+    FCAE_VPN("FCAE VPN v1.2.9 (رایگان)", "پروکسی آزاد MASQUE & Cloudflare WARP روی 127.0.0.1:1819", 1819),
     LOCAL_SOCKS5("SOCKS5 (V2RayNG)", "پروکسی محلی SOCKS5 روی 127.0.0.1:10808", 10808),
     LOCAL_HTTP("HTTP Proxy", "پروکسی محلی HTTP روی 127.0.0.1:10809", 10809),
     URL_RELAY("Stream Relay (Vercel/Worker)", "رله آنلاین HLS روی ورسل یا کلودفلر", 0)
@@ -21,25 +21,21 @@ enum class ProxyMode(val label: String, val desc: String, val defaultPort: Int) 
 
 /**
  * Proxy configuration for bypassing stream blocks, filtering, and geo-restrictions.
- * Supports:
- * 1. Aether MASQUE (HTTP/3 & HTTP/2 censorship-circumvention on 127.0.0.1:1819)
- * 2. Local SOCKS5 Proxy (V2RayNG / Nekobox / Clash on 127.0.0.1:10808)
- * 3. Local HTTP Proxy (127.0.0.1:10809)
- * 4. URL Relay (Vercel Edge / Cloudflare Worker / VPS)
+ * Connected directly to FCAE VPN (https://github.com/FCFlenkchy/FCAE_VPN).
  */
 object ProxyConfig {
     private const val PREFS_NAME = "famelack_proxy_prefs"
     private const val KEY_ENABLED = "proxy_enabled"
     private const val KEY_MODE = "proxy_mode"
-    private const val KEY_AETHER_PORT = "aether_port"
+    private const val KEY_FCAE_PORT = "fcae_port"
     private const val KEY_RELAY_URL = "relay_url"
     private const val KEY_SOCKS_PORT = "socks_port"
     private const val KEY_HTTP_PORT = "http_port"
     private const val KEY_AUTO_FALLBACK = "auto_fallback"
 
     var isProxyEnabled: Boolean = false
-    var proxyMode: ProxyMode = ProxyMode.AETHER_MASQUE
-    var aetherPort: Int = 1819
+    var proxyMode: ProxyMode = ProxyMode.FCAE_VPN
+    var fcaePort: Int = 1819
     var relayUrl: String = ""
     var localSocksPort: Int = 10808
     var localHttpPort: Int = 10809
@@ -48,9 +44,9 @@ object ProxyConfig {
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isProxyEnabled = prefs.getBoolean(KEY_ENABLED, false)
-        val modeName = prefs.getString(KEY_MODE, ProxyMode.AETHER_MASQUE.name) ?: ProxyMode.AETHER_MASQUE.name
-        proxyMode = try { ProxyMode.valueOf(modeName) } catch (_: Exception) { ProxyMode.AETHER_MASQUE }
-        aetherPort = prefs.getInt(KEY_AETHER_PORT, 1819)
+        val modeName = prefs.getString(KEY_MODE, ProxyMode.FCAE_VPN.name) ?: ProxyMode.FCAE_VPN.name
+        proxyMode = try { ProxyMode.valueOf(modeName) } catch (_: Exception) { ProxyMode.FCAE_VPN }
+        fcaePort = prefs.getInt(KEY_FCAE_PORT, 1819)
         relayUrl = prefs.getString(KEY_RELAY_URL, "") ?: ""
         localSocksPort = prefs.getInt(KEY_SOCKS_PORT, 10808)
         localHttpPort = prefs.getInt(KEY_HTTP_PORT, 10809)
@@ -62,7 +58,7 @@ object ProxyConfig {
         prefs.edit()
             .putBoolean(KEY_ENABLED, isProxyEnabled)
             .putString(KEY_MODE, proxyMode.name)
-            .putInt(KEY_AETHER_PORT, aetherPort)
+            .putInt(KEY_FCAE_PORT, fcaePort)
             .putString(KEY_RELAY_URL, relayUrl.trim())
             .putInt(KEY_SOCKS_PORT, localSocksPort)
             .putInt(KEY_HTTP_PORT, localHttpPort)
@@ -95,7 +91,7 @@ object ProxyConfig {
             }
         }
 
-        // For AETHER_MASQUE, SOCKS5 and HTTP, URL is handled via Socket Proxy in OkHttp
+        // For FCAE_VPN, SOCKS5 and HTTP, URL is handled via Socket Proxy in OkHttp
         return originalUrl
     }
 
@@ -103,8 +99,8 @@ object ProxyConfig {
         if (!isProxyEnabled) return null
         return try {
             when (proxyMode) {
-                ProxyMode.AETHER_MASQUE -> {
-                    Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", aetherPort))
+                ProxyMode.FCAE_VPN -> {
+                    Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", fcaePort))
                 }
                 ProxyMode.LOCAL_SOCKS5 -> {
                     Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localSocksPort))
@@ -125,11 +121,11 @@ object ProxyConfig {
      * Returns Pair<Boolean, String> (isSuccess, message / latency).
      */
     suspend fun testConnection(context: Context? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-        if (proxyMode == ProxyMode.AETHER_MASQUE && context != null) {
-            if (!AetherManager.isPortOpen(aetherPort)) {
-                val started = AetherManager.ensureStarted(context, aetherPort)
+        if (proxyMode == ProxyMode.FCAE_VPN && context != null) {
+            if (!FcaeVpnManager.isPortOpen(fcaePort)) {
+                val started = FcaeVpnManager.start(context, fcaePort)
                 if (!started) {
-                    return@withContext Pair(false, AetherManager.statusFlow.value)
+                    return@withContext Pair(false, FcaeVpnManager.statusFlow.value)
                 }
             }
         }
@@ -166,8 +162,8 @@ object ProxyConfig {
                 }
             }
         } catch (e: Exception) {
-            val msg = if (proxyMode == ProxyMode.AETHER_MASQUE && !AetherManager.isPortOpen(aetherPort)) {
-                "سرویس Aether فعال نیست (پورت $aetherPort باز نشد)"
+            val msg = if (proxyMode == ProxyMode.FCAE_VPN && !FcaeVpnManager.isPortOpen(fcaePort)) {
+                FcaeVpnManager.statusFlow.value
             } else {
                 "خطای اتصال: ${e.localizedMessage ?: e.javaClass.simpleName}"
             }

@@ -35,23 +35,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Setup Aether MASQUE native binaries
+      - name: Setup FCAE VPN v1.2.9 native libraries
         run: |
           set -e
-          BASE=https://github.com/CluvexStudio/Aether/releases/download/v1.6.0
-          declare -A AE=( [arm64-v8a]=aether-android-arm64 [armeabi-v7a]=aether-android-armv7 [x86_64]=aether-android-x86_64 )
-          for abi in "${!AE[@]}"; do
-            mkdir -p "app/src/main/jniLibs/$abi"
-            if [ ! -f "app/src/main/jniLibs/$abi/libaether.so" ]; then
-              curl -fsSL -o a.tar.gz "$BASE/${AE[$abi]}.tar.gz"
-              tar -xzf a.tar.gz
-              mv aether "app/src/main/jniLibs/$abi/libaether.so"
-              chmod +x "app/src/main/jniLibs/$abi/libaether.so"
-              rm -f a.tar.gz
-            fi
-          done
-          echo "=== Aether binaries in jniLibs ==="
-          ls -la app/src/main/jniLibs/*/libaether.so
+          if [ ! -f "app/src/main/jniLibs/arm64-v8a/libfcaevpn_native.so" ]; then
+            curl -fsSL -o universal.zip "https://github.com/FCFlenkchy/FCAE_VPN/releases/download/v1.2.9/FCAE_VPN-android-universal.zip"
+            unzip -q -o universal.zip
+            unzip -q -o FCAE_VPN-android-universal.apk "lib/*" -d /tmp/fcae/
+            mkdir -p app/src/main/jniLibs/arm64-v8a app/src/main/jniLibs/armeabi-v7a app/src/main/jniLibs/x86_64
+            cp -r /tmp/fcae/lib/* app/src/main/jniLibs/
+            rm -rf universal.zip FCAE_VPN-android-universal.apk /tmp/fcae/
+          fi
+          echo "=== FCAE VPN libraries in jniLibs ==="
+          ls -la app/src/main/jniLibs/*/
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace

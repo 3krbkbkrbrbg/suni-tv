@@ -59,7 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.famelack.app.player.AetherManager
+import com.famelack.app.player.FcaeVpnManager
 import com.famelack.app.player.ProxyConfig
 import com.famelack.app.player.ProxyMode
 import kotlinx.coroutines.launch
@@ -74,7 +74,7 @@ fun ProxySettingsDialog(
 
     var isEnabled by remember { mutableStateOf(ProxyConfig.isProxyEnabled) }
     var selectedMode by remember { mutableStateOf(ProxyConfig.proxyMode) }
-    var aetherPort by remember { mutableStateOf(ProxyConfig.aetherPort.toString()) }
+    var fcaePort by remember { mutableStateOf(ProxyConfig.fcaePort.toString()) }
     var relayUrl by remember { mutableStateOf(ProxyConfig.relayUrl) }
     var socksPort by remember { mutableStateOf(ProxyConfig.localSocksPort.toString()) }
     var httpPort by remember { mutableStateOf(ProxyConfig.localHttpPort.toString()) }
@@ -82,10 +82,12 @@ fun ProxySettingsDialog(
 
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    var aetherRunning by remember { mutableStateOf(false) }
+    var isFcaeRunning by remember { mutableStateOf(false) }
+
+    val fcaeStatus by FcaeVpnManager.statusFlow.collectAsState()
 
     LaunchedEffect(Unit) {
-        aetherRunning = AetherManager.isPortOpen(aetherPort.toIntOrNull() ?: 1819)
+        isFcaeRunning = FcaeVpnManager.isPortOpen(fcaePort.toIntOrNull() ?: 1819)
     }
 
     AlertDialog(
@@ -169,10 +171,7 @@ fun ProxySettingsDialog(
 
                 // Input fields per mode
                 when (selectedMode) {
-                    ProxyMode.AETHER_MASQUE -> {
-                        val aetherStatus by AetherManager.statusFlow.collectAsState()
-                        val aetherLog by AetherManager.lastLogFlow.collectAsState()
-
+                    ProxyMode.FCAE_VPN -> {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -184,28 +183,19 @@ fun ProxySettingsDialog(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (aetherRunning) Color(0xFF00E676) else Color(0xFFFFB74D))
+                                            .background(if (isFcaeRunning) Color(0xFF00E676) else Color(0xFFFFB74D))
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = aetherStatus,
+                                        text = fcaeStatus,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (aetherRunning) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                if (aetherLog.isNotBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = aetherLog,
-                                        fontSize = 9.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2
+                                        color = if (isFcaeRunning) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = "پروتکل MASQUE بر پایه HTTP/3 کلودفلر؛ نیازی به سرور خارجی یا کانفیگ ندارد و به صورت خودکار با حالت Turbo تونل می‌زند.",
+                                    text = "موتور قدرتمند FCAE VPN v1.2.9 متصل به شبکه کلودفلر و MASQUE؛ بدون نیاز به ابزار خارجی ترافیک استریم‌ها را از تحریم و فیلتر عبور می‌دهد.",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -215,13 +205,13 @@ fun ProxySettingsDialog(
                         Spacer(Modifier.height(8.dp))
 
                         OutlinedTextField(
-                            value = aetherPort,
+                            value = fcaePort,
                             onValueChange = {
-                                aetherPort = it
-                                aetherRunning = AetherManager.isPortOpen(it.toIntOrNull() ?: 1819)
+                                fcaePort = it
+                                isFcaeRunning = FcaeVpnManager.isPortOpen(it.toIntOrNull() ?: 1819)
                             },
-                            label = { Text("پورت SOCKS5 Aether") },
-                            placeholder = { Text("1819 (پیش‌فرض Aether)") },
+                            label = { Text("پورت SOCKS5") },
+                            placeholder = { Text("1819 (پیش‌فرض FCAE)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -232,9 +222,9 @@ fun ProxySettingsDialog(
                         FilledTonalButton(
                             onClick = {
                                 scope.launch {
-                                    val port = aetherPort.toIntOrNull() ?: 1819
-                                    AetherManager.ensureStarted(context, port)
-                                    aetherRunning = AetherManager.isPortOpen(port)
+                                    val port = fcaePort.toIntOrNull() ?: 1819
+                                    FcaeVpnManager.start(context, port)
+                                    isFcaeRunning = FcaeVpnManager.isPortOpen(port)
                                 }
                             },
                             modifier = Modifier
@@ -243,23 +233,22 @@ fun ProxySettingsDialog(
                         ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("راه‌اندازی فوری تونل Aether MASQUE", fontSize = 11.sp)
+                            Text("راه‌اندازی فوری پروکسی FCAE VPN", fontSize = 11.sp)
                         }
 
                         Spacer(Modifier.height(6.dp))
 
-                        // Check if Aether Android app is installed
-                        val aetherAppIntent = remember { context.packageManager.getLaunchIntentForPackage("com.cluvex.aether") }
-                        if (aetherAppIntent != null) {
+                        val fcaeAppIntent = remember { context.packageManager.getLaunchIntentForPackage("com.fc.fcaevpn") }
+                        if (fcaeAppIntent != null) {
                             OutlinedButton(
-                                onClick = { context.startActivity(aetherAppIntent) },
+                                onClick = { context.startActivity(fcaeAppIntent) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(38.dp)
                             ) {
                                 Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("باز کردن اپلیکیشن Aether", fontSize = 11.sp)
+                                Text("باز کردن برنامه FCAE VPN", fontSize = 11.sp)
                             }
                         } else {
                             Row(
@@ -268,7 +257,7 @@ fun ProxySettingsDialog(
                                     .clickable {
                                         val intent = Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse("https://github.com/3krbkbkrbrbg/aether-android")
+                                            Uri.parse("https://github.com/FCFlenkchy/FCAE_VPN/releases/tag/v1.2.9")
                                         )
                                         context.startActivity(intent)
                                     }
@@ -277,7 +266,7 @@ fun ProxySettingsDialog(
                             ) {
                                 Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(6.dp))
-                                Text("مشاهده سورس Aether Android در گیت‌هاب", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                                Text("دانلود برنامه FCAE VPN v1.2.9 از گیت‌هاب", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                             }
                         }
                     }
@@ -372,26 +361,26 @@ fun ProxySettingsDialog(
                             scope.launch {
                                 val prevEnabled = ProxyConfig.isProxyEnabled
                                 val prevMode = ProxyConfig.proxyMode
-                                val prevAether = ProxyConfig.aetherPort
+                                val prevFcae = ProxyConfig.fcaePort
                                 val prevRelay = ProxyConfig.relayUrl
                                 val prevSocks = ProxyConfig.localSocksPort
                                 val prevHttp = ProxyConfig.localHttpPort
 
                                 ProxyConfig.isProxyEnabled = true
                                 ProxyConfig.proxyMode = selectedMode
-                                ProxyConfig.aetherPort = aetherPort.toIntOrNull() ?: 1819
+                                ProxyConfig.fcaePort = fcaePort.toIntOrNull() ?: 1819
                                 ProxyConfig.relayUrl = relayUrl
                                 ProxyConfig.localSocksPort = socksPort.toIntOrNull() ?: 10808
                                 ProxyConfig.localHttpPort = httpPort.toIntOrNull() ?: 10809
 
                                 val res = ProxyConfig.testConnection(context)
                                 testResult = res
-                                aetherRunning = AetherManager.isPortOpen(ProxyConfig.aetherPort)
+                                isFcaeRunning = FcaeVpnManager.isPortOpen(ProxyConfig.fcaePort)
                                 isTesting = false
 
                                 ProxyConfig.isProxyEnabled = prevEnabled
                                 ProxyConfig.proxyMode = prevMode
-                                ProxyConfig.aetherPort = prevAether
+                                ProxyConfig.fcaePort = prevFcae
                                 ProxyConfig.relayUrl = prevRelay
                                 ProxyConfig.localSocksPort = prevSocks
                                 ProxyConfig.localHttpPort = prevHttp
@@ -440,15 +429,15 @@ fun ProxySettingsDialog(
                 onClick = {
                     ProxyConfig.isProxyEnabled = isEnabled
                     ProxyConfig.proxyMode = selectedMode
-                    ProxyConfig.aetherPort = aetherPort.toIntOrNull() ?: 1819
+                    ProxyConfig.fcaePort = fcaePort.toIntOrNull() ?: 1819
                     ProxyConfig.relayUrl = relayUrl.trim()
                     ProxyConfig.localSocksPort = socksPort.toIntOrNull() ?: 10808
                     ProxyConfig.localHttpPort = httpPort.toIntOrNull() ?: 10809
                     ProxyConfig.autoFallbackToDirect = autoFallback
                     ProxyConfig.save(context)
-                    if (isEnabled && selectedMode == ProxyMode.AETHER_MASQUE) {
+                    if (isEnabled && selectedMode == ProxyMode.FCAE_VPN) {
                         scope.launch {
-                            AetherManager.ensureStarted(context, ProxyConfig.aetherPort)
+                            FcaeVpnManager.start(context, ProxyConfig.fcaePort)
                         }
                     }
                     onSaved()
