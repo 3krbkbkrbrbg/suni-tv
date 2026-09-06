@@ -1,0 +1,18 @@
+{
+  "name": "Suni TV — تلویزیون و رادیو آنلاین",
+  "short_name": "Suni TV",
+  "description": "پخش زنده بیش از ۶,۶۰۰ شبکه تلویزیونی، ۲۶,۹۰۰ ایستگاه رادیویی و ۴,۱۰۰ وبکم زنده سراسر جهان",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0a0b10",
+  "theme_color": "#f59e0b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

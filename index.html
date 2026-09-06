@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>☀️ Suni TV — تلویزیون و رادیو آنلاین سراسر جهان</title>
+  <meta name="description" content="پخش زنده بیش از ۶,۶۰۰ شبکه تلویزیونی، ۲۶,۹۰۰ ایستگاه رادیویی و ۴,۱۰۰ وبکم زنده سراسر جهان — بدون تبلیغات، رایگان و با پروکسی داخلی">
+  <meta name="theme-color" content="#0a0b10">
+  
+  <!-- PWA & Favicon -->
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- HLS.js for cross-browser HLS streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Announcement / App Bar -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img src="icon.png" alt="Suni TV" class="brand-logo">
+        <div class="brand-info">
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">Suni TV</h1>
+            <span class="badge-live"><span class="pulse-dot"></span> زنده</span>
+          </div>
+          <span class="brand-sub">تلویزیون، رادیو و وبکم‌های جهان</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-tab="tv">
+          <span class="tab-icon">📺</span>
+          <span class="tab-text">تلویزیون</span>
+          <span class="tab-badge" id="tvCount">۶,۶۰۰+</span>
+        </button>
+        <button class="nav-tab" data-tab="radio">
+          <span class="tab-icon">📻</span>
+          <span class="tab-text">رادیو</span>
+          <span class="tab-badge" id="radioCount">۲۶,۹۰۰+</span>
+        </button>
+        <button class="nav-tab" data-tab="webcams">
+          <span class="tab-icon">📹</span>
+          <span class="tab-text">وبکم‌ها</span>
+          <span class="tab-badge" id="webcamCount">۴,۱۰۰+</span>
+        </button>
+        <button class="nav-tab" data-tab="favs">
+          <span class="tab-icon">⭐</span>
+          <span class="tab-text">علاقه‌مندی‌ها</span>
+          <span class="tab-badge" id="favsCount">۰</span>
+        </button>
+      </nav>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <a href="https://github.com/3krbkbkrbrbg/suni-tv" target="_blank" class="btn-icon" title="ریپوی گیت‌هاب">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <a href="https://github.com/3krbkbkrbrbg/suni-tv/releases/latest" target="_blank" class="btn-app-dl" title="دانلود اپ اندروید و دسکتاپ">
+          📥 دانلود اپ
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Active Player Stage -->
+    <section class="player-stage" id="playerStage">
+      <div class="player-wrapper" id="playerWrapper">
+
+        <!-- Video Player (HLS / MP4) -->
+        <div class="video-container" id="videoContainer">
+          <video id="videoPlayer" playsinline controls preload="none" poster="icon.png"></video>
+          <div class="video-overlay-loader" id="playerLoader">
+            <div class="spinner"></div>
+            <span class="loader-text">در حال بارگذاری جریان...</span>
+          </div>
+        </div>
+
+        <!-- YouTube Live Embed -->
+        <div class="youtube-container" id="youtubeContainer" style="display: none;">
+          <iframe id="youtubeIframe" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
+        <!-- Radio Audio Deck (Visualizer & Deck) -->
+        <div class="radio-deck" id="radioDeck" style="display: none;">
+          <div class="radio-visualizer">
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+          </div>
+          <div class="radio-info">
+            <span class="radio-badge">📻 پخش زنده رادیویی</span>
+            <h2 class="radio-title" id="radioTitle">شبکه انتخابی</h2>
+            <p class="radio-sub" id="radioSub">کیفیت اصلی / بدون توقف</p>
+          </div>
+          <audio id="audioPlayer" controls preload="none"></audio>
+        </div>
+
+        <!-- Player Details & Control Bar -->
+        <div class="player-meta-bar" id="playerMetaBar">
+          <div class="channel-headline">
+            <span class="channel-flag" id="playingFlag">🇮🇷</span>
+            <div class="channel-titles">
+              <h2 class="channel-name" id="playingTitle">یک شبکه را انتخاب کنید</h2>
+              <div class="channel-tags" id="playingTags">
+                <span class="tag" id="playingCountry">ایران</span>
+                <span class="tag" id="playingCategory">عمومی</span>
+                <span class="tag tag-quality" id="playingQuality">HD</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="player-toolbar">
+            <button class="tool-btn" id="btnFav" title="افزودن به علاقه‌مندی‌ها">
+              <span class="tool-icon">🤍</span>
+            </button>
+            <button class="tool-btn" id="btnPip" title="پخش تصویر در تصویر (PiP)">
+              <span class="tool-icon">⧉</span>
+            </button>
+            <button class="tool-btn" id="btnVlc" title="پخش در VLC / پلیر خارجی">
+              <span class="tool-icon">🚀</span>
+              <span class="tool-label">VLC</span>
+            </button>
+            <button class="tool-btn" id="btnCopyUrl" title="کپی لینک مستقیم پخش">
+              <span class="tool-icon">🔗</span>
+            </button>
+            <button class="tool-btn" id="btnFullscreen" title="تمام‌صفحه">
+              <span class="tool-icon">⛶</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Settings Deck: Proxy, Quality, Data Saver -->
+        <div class="player-settings-bar">
+          <!-- Proxy Mode Toggle -->
+          <div class="setting-item">
+            <span class="setting-label">🛡️ مسیر اتصال:</span>
+            <div class="toggle-group" id="proxyToggle">
+              <button class="toggle-btn active" data-proxy="direct">مستقیم (سریع)</button>
+              <button class="toggle-btn" data-proxy="cf">پروکسی ضد فیلتر</button>
+              <button class="toggle-btn" data-proxy="allorigins">پروکسی کمکی</button>
+            </div>
+          </div>
+
+          <!-- Data Saver / Quality Mode -->
+          <div class="setting-item">
+            <span class="setting-label">⚡ کیفیت / مصرف دیتا:</span>
+            <select class="select-box" id="qualitySelect">
+              <option value="auto">خودکار (بهترین کیفیت)</option>
+              <option value="720">HD 720p</option>
+              <option value="480">SD 480p</option>
+              <option value="360">360p (کاهش ۷۰٪ دیتا)</option>
+              <option value="240">240p (صرفه‌جویی حداکثر)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Error Notification Toast -->
+        <div class="player-error" id="playerError" style="display: none;">
+          <span class="error-icon">⚠️</span>
+          <span class="error-msg" id="errorMessage">خطا در بارگذاری جریان</span>
+          <button class="btn-retry" id="btnRetryProxy">🔄 تلاش با پروکسی ضد فیلتر</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Filter & Search Toolbar -->
+    <section class="filter-section">
+      <div class="filter-bar">
+        <!-- Search Input -->
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="جستجو در بین ۳۷,۰۰۰ شبکه، کشور یا دسته‌بندی..." autocomplete="off">
+          <button class="search-clear" id="searchClear" style="display: none;">✕</button>
+        </div>
+
+        <!-- Country Filter Button -->
+        <button class="filter-btn" id="btnCountryModal">
+          <span class="filter-icon">🌍</span>
+          <span id="selectedCountryLabel">همه کشورها (۲۴۶)</span>
+          <span class="arrow-down">▾</span>
+        </button>
+
+        <!-- Category Filter Dropdown -->
+        <div class="filter-dropdown-wrap">
+          <select class="filter-select" id="categorySelect">
+            <option value="all">همه دسته‌ها</option>
+            <option value="news">📰 اخبار (News)</option>
+            <option value="music">🎵 موسیقی (Music)</option>
+            <option value="entertainment">🎭 سرگرمی (Entertainment)</option>
+            <option value="sports">⚽ ورزشی (Sports)</option>
+            <option value="movies">🎬 فیلم و سریال (Movies)</option>
+            <option value="kids">🧸 کودک و نوجوان (Kids)</option>
+            <option value="documentary">🌿 مستند (Documentary)</option>
+            <option value="culture">🏛️ فرهنگ و تاریخ (Culture)</option>
+            <option value="series">📺 سریال‌ها (Series)</option>
+            <option value="general">🌐 عمومی (General)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Quick Filter Tags -->
+      <div class="quick-tags">
+        <button class="quick-pill active" data-filter="iran">
+          <span class="pill-flag">🇮🇷</span> کانال‌های فارسی (<span id="iranChannelsCount">۹۱</span>)
+        </button>
+        <button class="quick-pill" data-filter="us">
+          <span class="pill-flag">🇺🇸</span> آمریکا
+        </button>
+        <button class="quick-pill" data-filter="gb">
+          <span class="pill-flag">🇬🇧</span> بریتانیا
+        </button>
+        <button class="quick-pill" data-filter="tr">
+          <span class="pill-flag">🇹🇷</span> ترکیه
+        </button>
+        <button class="quick-pill" data-filter="de">
+          <span class="pill-flag">🇩🇪</span> آلمان
+        </button>
+        <button class="quick-pill" data-filter="fr">
+          <span class="pill-flag">🇫🇷</span> فرانسه
+        </button>
+        <button class="quick-pill" data-filter="all">
+          🌐 همه جهان
+        </button>
+      </div>
+    </section>
+
+    <!-- Channels Catalog Section -->
+    <section class="channels-section">
+      <div class="channels-header">
+        <div class="catalog-summary">
+          <h3 class="catalog-title" id="catalogTitle">کانال‌های تلویزیونی ایران و فارسی</h3>
+          <span class="catalog-count" id="catalogCount">در حال بارگذاری...</span>
+        </div>
+        <button class="btn-random" id="btnRandom" title="پخش یک شبکه تصادفی">
+          🎲 شبکه تصادفی
+        </button>
+      </div>
+
+      <!-- Grid of Channels -->
+      <div class="channels-grid" id="channelsGrid">
+        <!-- Injected via JavaScript -->
+        <div class="loading-card">
+          <div class="spinner"></div>
+          <p>در حال آماده‌سازی فهرست کانال‌ها...</p>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <span class="empty-icon">🔍</span>
+        <h4 class="empty-title">شبکه‌ای یافت نشد</h4>
+        <p class="empty-desc">کلمه کلیدی دیگری را جستجو کنید یا فیلترها را تغییر دهید.</p>
+        <button class="btn-reset-filters" id="btnResetFilters">بازنشانی فیلترها</button>
+      </div>
+
+      <!-- Sentinel for Infinite Scroll -->
+      <div id="scrollSentinel" class="scroll-sentinel"></div>
+    </section>
+
+  </main>
+
+  <!-- Sticky Floating Mini-Player -->
+  <aside class="floating-mini-player" id="miniPlayer" style="display: none;">
+    <div class="mini-player-inner">
+      <div class="mini-thumb-wrap" id="miniThumb">
+        <span class="mini-icon">📺</span>
+      </div>
+      <div class="mini-info">
+        <span class="mini-name" id="miniTitle">نام شبکه</span>
+        <span class="mini-badge">🔴 در حال پخش</span>
+      </div>
+      <div class="mini-controls">
+        <button class="mini-btn" id="miniPlayPause" title="توقف/پخش">⏸️</button>
+        <button class="mini-btn" id="miniExpand" title="بزرگنمایی پلیر">🔼</button>
+        <button class="mini-btn" id="miniClose" title="بستن">✕</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Country Selection Modal -->
+  <div class="modal-backdrop" id="countryModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">🌍</span>
+          <h3 class="modal-title">انتخاب کشور</h3>
+        </div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-search">
+        <input type="text" id="countrySearchInput" class="modal-search-input" placeholder="جستجوی کشور به فارسی یا انگلیسی...">
+      </div>
+      <div class="country-list" id="countryList">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="footer-title">☀️ Suni TV (سانی تی‌وی)</span>
+        <p class="footer-desc">پخش زنده بیش از ۳۷,۰۰۰ شبکه تلویزیونی و رادیویی جهان به‌صورت آزاد، متن‌باز و بدون سانسور.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/3krbkbkrbrbg/suni-tv" target="_blank">گیت‌هاب پروژه</a>
+        <a href="https://github.com/3krbkbkrbrbg/suni-tv/releases/latest" target="_blank">دانلود اندروید (APK)</a>
+        <a href="https://github.com/3krbkbkrbrbg/suni-tv-desktop/releases" target="_blank">نسخه مک و ویندوز</a>
+        <a href="https://x.com/hellboy_code" target="_blank">توسعه‌دهنده (@hellboy_code)</a>
+      </div>
+      <div class="footer-copy">
+        ساخته شده با ❤️ برای آزادی اطلاعات · داده‌ها از famelack-data (مجوز CC-BY-SA 4.0)
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
