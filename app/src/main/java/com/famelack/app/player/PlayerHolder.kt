@@ -15,6 +15,8 @@ import com.famelack.app.data.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 enum class StreamQuality(
     val label: String,
@@ -89,6 +91,7 @@ object PlayerHolder {
                                 _isPlayingFlow.value = false
                             } else if (playbackState == Player.STATE_READY) {
                                 _lastErrorFlow.value = null
+                                retryAttempts = 0
                             }
                         }
 
@@ -108,24 +111,98 @@ object PlayerHolder {
         )
     }
 
+    // Proxy auto-reconnect state
+    @Volatile private var lastRequestedUrl: String? = null
+    @Volatile private var lastRequestedTitle: String? = null
+    @Volatile private var lastRequestedChannel: Channel? = null
+    @Volatile private var proxyCollectorStarted = false
+    private var retryAttempts = 0
+    private val maxRetries = 3
+
+    private fun ensureProxyCollector() {
+        if (proxyCollectorStarted) return
+        proxyCollectorStarted = true
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            FcaeVpnManager.statusFlow.collect { status ->
+                val ready = status.contains("متصل شد") || status.contains("متصل روی")
+                if (ready) {
+                    val curCtx = appContext ?: return@collect
+                    val ch = lastRequestedChannel ?: _currentChannelFlow.value
+                    val url = lastRequestedUrl ?: ch?.primaryUrl
+                    val title = lastRequestedTitle ?: ch?.name
+                    if (ch != null && url != null && title != null) {
+                        val ctrl = controller
+                        val isPlaying = ctrl?.isPlaying == true
+                        val hasError = _lastErrorFlow.value != null
+                        val isIdle = ctrl?.playbackState == Player.STATE_IDLE
+                        // Also catch BUFFERING that got stuck due to proxy drop
+                        val isStuck = ctrl?.playbackState == Player.STATE_BUFFERING && hasError
+                        if (!isPlaying && (hasError || isIdle || isStuck)) {
+                            android.util.Log.i(TAG, "Proxy ready ($status) -> auto-replay $title")
+                            _lastErrorFlow.value = "پروکسی متصل شد — اتصال مجدد خودکار..."
+                            kotlinx.coroutines.delay(700)
+                            isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
+                            val targetUrl = ProxyConfig.getEffectiveUrl(url)
+                            playUrlInternal(curCtx, targetUrl, title)
+                            retryAttempts = 0
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun playStream(context: Context, url: String, title: String, channel: Channel? = null) {
         appContext = context.applicationContext
         _lastErrorFlow.value = null
+        lastRequestedUrl = url
+        lastRequestedTitle = title
+        lastRequestedChannel = channel
+        retryAttempts = 0
         if (channel != null) {
             _currentChannelFlow.value = channel
         }
+        ensureProxyCollector()
 
-        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN) {
-            Thread {
-                kotlinx.coroutines.runBlocking {
-                    FcaeVpnManager.start(context, ProxyConfig.fcaePort)
+        // If FCAE VPN proxy is enabled but SOCKS port not yet open -> wait for it, don't fire immediate failing request
+        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN && !FcaeVpnManager.isPortOpen(ProxyConfig.fcaePort)) {
+            _lastErrorFlow.value = "در حال اتصال پروکسی FCAE... (به محض اتصال، پخش خودکار آغاز می‌شود)"
+            // Fire VPN start in background; collector above will auto-replay when ready
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                val ok = FcaeVpnManager.start(context, ProxyConfig.fcaePort)
+                if (!ok) {
+                    // VPN failed -> fallback to direct if allowed, or surface error with retry
+                    if (ProxyConfig.autoFallbackToDirect) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            isUsingProxyForCurrent = false
+                            _lastErrorFlow.value = "پروکسی وصل نشد — تلاش با اتصال مستقیم..."
+                            playUrlInternal(context, url, title)
+                        }
+                    } else {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            _lastErrorFlow.value = FcaeVpnManager.statusFlow.value.ifBlank { "پروکسی وصل نشد" }
+                        }
+                    }
                 }
-            }.start()
+                // on success, the statusFlow collector will handle replay
+            }
+            return
         }
 
         isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
         val targetUrl = ProxyConfig.getEffectiveUrl(url)
         playUrlInternal(context, targetUrl, title)
+    }
+
+    fun replayLast(context: Context? = null) {
+        val ctx = context ?: appContext ?: return
+        val ch = lastRequestedChannel ?: _currentChannelFlow.value ?: return
+        val url = lastRequestedUrl ?: ch.primaryUrl ?: return
+        val title = lastRequestedTitle ?: ch.name
+        _lastErrorFlow.value = null
+        isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
+        val targetUrl = ProxyConfig.getEffectiveUrl(url)
+        playUrlInternal(ctx, targetUrl, title)
     }
 
     private fun playUrlInternal(context: Context, effectiveUrl: String, title: String) {
@@ -169,13 +246,30 @@ object PlayerHolder {
         val lastChannel = _currentChannelFlow.value
         val ctx = appContext
 
-        if (lastChannel != null && ctx != null && isUsingProxyForCurrent && ProxyConfig.autoFallbackToDirect) {
-            Log.w(TAG, "Proxy stream failed [${error.errorCodeName}]. Falling back to direct stream...")
-            isUsingProxyForCurrent = false
-            val directUrl = lastChannel.primaryUrl ?: return
-            _lastErrorFlow.value = "Proxy failed, retrying direct..."
-            playUrlInternal(ctx, directUrl, lastChannel.name)
-            return
+        // If we were using proxy and it is currently reconnecting -> retry via proxy instead of immediate fallback
+        val proxyStillConnecting = ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN
+                && !FcaeVpnManager.isPortOpen(ProxyConfig.fcaePort)
+                && (FcaeVpnManager.statusFlow.value.contains("در حال") || FcaeVpnManager.statusFlow.value.contains("اتصال"))
+
+        if (lastChannel != null && ctx != null && isUsingProxyForCurrent) {
+            if (proxyStillConnecting && retryAttempts < maxRetries) {
+                retryAttempts++
+                Log.w(TAG, "Proxy stream failed [${error.errorCodeName}] but proxy reconnecting (attempt $retryAttempts/$maxRetries) -> will auto-retry when ready")
+                _lastErrorFlow.value = "اتصال پروکسی قطع شد — در حال اتصال مجدد خودکار... ($retryAttempts/$maxRetries)"
+                // Ensure VPN is (re)starting; collector will replay when status becomes ready
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    FcaeVpnManager.start(ctx, ProxyConfig.fcaePort)
+                }
+                return
+            }
+            if (ProxyConfig.autoFallbackToDirect) {
+                Log.w(TAG, "Proxy stream failed [${error.errorCodeName}]. Falling back to direct stream...")
+                isUsingProxyForCurrent = false
+                val directUrl = lastRequestedUrl ?: lastChannel.primaryUrl ?: return
+                _lastErrorFlow.value = "پروکسی ناموفق — تلاش با اتصال مستقیم..."
+                playUrlInternal(ctx, directUrl, lastChannel.name)
+                return
+            }
         }
 
         _lastErrorFlow.value = "Playback error: ${error.errorCodeName} (${error.message ?: "Connection dropped"})"
