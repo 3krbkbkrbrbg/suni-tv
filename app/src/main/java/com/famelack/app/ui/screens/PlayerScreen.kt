@@ -99,6 +99,7 @@ import com.famelack.app.data.codeToFlag
 import com.famelack.app.player.PlayerHolder
 import com.famelack.app.player.ProxyConfig
 import com.famelack.app.player.StreamQuality
+import com.famelack.app.player.WebViewProxyManager
 import com.famelack.app.ui.components.ProxySettingsDialog
 import kotlinx.coroutines.launch
 
@@ -151,6 +152,8 @@ fun PlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Clear WebView proxy on exit to avoid leaking proxy config to other WebView users
+            WebViewProxyManager.clearProxy()
         }
     }
 
@@ -175,8 +178,11 @@ fun PlayerScreen(
         }
         if (!showYoutubeMode) {
             startPlayback()
+            WebViewProxyManager.clearProxy()
         } else {
             PlayerHolder.pause()
+            // Route YouTube WebView traffic through FCAE proxy if active
+            WebViewProxyManager.applyFromProxyConfig()
         }
     }
 
@@ -493,6 +499,10 @@ fun PlayerScreen(
                                         isProxyActive = active
                                         ProxyConfig.isProxyEnabled = active
                                         ProxyConfig.save(context)
+                                        // If YouTube mode is active, also update WebView proxy routing
+                                        if (showYoutubeMode) {
+                                            WebViewProxyManager.applyFromProxyConfig()
+                                        }
                                         startPlayback()
                                         val msg = if (active) "پروکسی فعال شد" else "اتصال مستقیم فعال شد"
                                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -646,6 +656,10 @@ fun PlayerScreen(
             onDismiss = { showProxyDialog = false },
             onSaved = {
                 isProxyActive = ProxyConfig.isProxyEnabled
+                // Also update WebView proxy for YouTube mode
+                if (showYoutubeMode) {
+                    WebViewProxyManager.applyFromProxyConfig()
+                }
                 startPlayback()
             }
         )

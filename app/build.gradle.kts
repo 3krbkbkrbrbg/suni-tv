@@ -11,8 +11,8 @@ android {
         applicationId = "com.sunitv.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.0.0"
+        versionCode = 15
+        versionName = "2.1.0"
         resourceConfigurations += listOf("en")
         vectorDrawables { useSupportLibrary = true }
         ndk {
@@ -106,6 +106,9 @@ dependencies {
 
     // Coil — for any image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // AndroidX WebKit — for WebView proxy support (YouTube via FCAE)
+    implementation("androidx.webkit:webkit:1.10.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

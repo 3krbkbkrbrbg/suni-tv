@@ -168,6 +168,8 @@ object FcaeVpnManager {
             NativeEngine.nativeStop()
             isRunning = false
             _statusFlow.value = "غیرفعال"
+            // Also clear WebView proxy when FCAE engine stops
+            WebViewProxyManager.clearProxy()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping FCAE VPN", e)
         }
