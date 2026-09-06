@@ -66,16 +66,16 @@ class FamelackRepository(private val context: Context) {
             // Patch IR channelCount to include Farsi diaspora (otherwise list shows 57 but Iran has 91 TV Farsi total)
             if (code.equals("IR", ignoreCase = true) && kind.slug in setOf("tv", "radio")) {
                 val patched = JSONObject(o.toString())
-                val base = root.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())?.length() ?: 0
+                val base = r.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())?.length() ?: 0
                 val seen = mutableSetOf<String>()
-                val baseArr = root.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())
+                val baseArr = r.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())
                 if (baseArr != null) {
                     for (i in 0 until baseArr.length()) {
                         seen.add(baseArr.optJSONObject(i)?.optString("nanoid") ?: "")
                     }
                 }
                 var extra = 0
-                val allArr = root.optJSONObject(kind.slug)?.optJSONObject("by_category")?.optJSONArray("all")
+                val allArr = r.optJSONObject(kind.slug)?.optJSONObject("by_category")?.optJSONArray("all")
                 if (allArr != null) {
                     for (i in 0 until allArr.length()) {
                         val obj = allArr.optJSONObject(i) ?: continue
