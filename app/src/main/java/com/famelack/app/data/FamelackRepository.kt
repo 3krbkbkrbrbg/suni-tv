@@ -126,7 +126,7 @@ class FamelackRepository(private val context: Context) {
 
         // For IR: merge diaspora + homeland (all Farsi) so Iran list covers all Persian channels (inside + outside)
         if (lowerCode == "ir" && kind.slug in setOf("tv", "radio")) {
-            val seen = base.mapNotNull { it.nanoid }.toMutableSet()
+            val seen = base.mapNotNull { it.id }.toMutableSet()
             val allArr = r.optJSONObject(kind.slug)?.optJSONObject("by_category")?.optJSONArray("all")
             if (allArr != null) {
                 for (i in 0 until allArr.length()) {
@@ -138,7 +138,7 @@ class FamelackRepository(private val context: Context) {
                     }
                     if (!hasFas) continue
                     val ch = Channel.fromJson(obj)
-                    val id = ch.nanoid
+                    val id = ch.id
                     if (id.isNotEmpty() && seen.add(id)) {
                         (base as MutableList).add(ch)
                     }
