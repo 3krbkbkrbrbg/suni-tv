@@ -23,12 +23,13 @@ enum class StreamQuality(
     val description: String,
     val maxW: Int,
     val maxH: Int,
-    val maxBitrate: Int
+    val maxBitrate: Int,
+    val maxAudioBitrate: Int
 ) {
-    AUTO("Auto (HD)", "Best quality", Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE),
-    MEDIUM("480p", "Balanced (480p)", 854, 480, 1_000_000),
-    DATA_SAVER("360p", "Data Saver (-70%)", 640, 360, 500_000),
-    ULTRA_SAVER("240p", "Ultra Saver (-85%)", 426, 240, 250_000)
+    AUTO("Auto (HD)", "Best quality", Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE),
+    MEDIUM("480p", "Balanced (480p)", 854, 480, 1_000_000, 128_000),
+    DATA_SAVER("360p", "Data Saver (-70%)", 640, 360, 500_000, 64_000),
+    ULTRA_SAVER("240p", "Ultra Saver (-85%)", 426, 240, 250_000, 32_000)
 }
 
 /**
@@ -290,12 +291,18 @@ object PlayerHolder {
             c.trackSelectionParameters = c.trackSelectionParameters.buildUpon()
                 .setMaxVideoSize(quality.maxW, quality.maxH)
                 .setMaxVideoBitrate(quality.maxBitrate)
+                .setMaxAudioBitrate(quality.maxAudioBitrate)
+                .setForceHighestSupportedBitrate(false)
                 .build()
-            Log.d(TAG, "Applied quality: ${quality.label} (maxBitrate: ${quality.maxBitrate})")
+            appliedQuality = quality
+            Log.d(TAG, "Applied quality: ${quality.label} (videoMax:${quality.maxBitrate} audioMax:${quality.maxAudioBitrate} ${quality.maxW}x${quality.maxH})")
         } catch (e: Throwable) {
             Log.e(TAG, "Failed to apply track selection quality", e)
         }
     }
+
+    @Volatile var appliedQuality: StreamQuality = StreamQuality.AUTO
+        private set
 
     fun togglePlayPause() {
         val c = controller ?: return

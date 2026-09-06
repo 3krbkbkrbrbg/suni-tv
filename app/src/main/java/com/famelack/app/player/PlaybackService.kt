@@ -13,6 +13,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -49,11 +51,31 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        // Adaptive LoadControl: smaller buffers for Data Saver modes to actually reduce data + faster start on slow nets
+        val saver = try { PlayerHolder.appliedQuality } catch (_: Throwable) { null }
+        val loadControl = when (saver?.name) {
+            "ULTRA_SAVER" -> DefaultLoadControl.Builder()
+                .setBufferDurationsMs(10_000, 30_000, 1_000, 1_000)
+                .setBackBuffer(0, false)
+                .build()
+            "DATA_SAVER" -> DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 40_000, 1_500, 2_000)
+                .build()
+            "MEDIUM" -> DefaultLoadControl.Builder()
+                .setBufferDurationsMs(20_000, 50_000, 1_500, 2_000)
+                .build()
+            else -> DefaultLoadControl.Builder()
+                .setBufferDurationsMs(30_000, 60_000, 1_500, 2_000)
+                .build()
+        }
+
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(dynamicDataSourceFactory)
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            .setBandwidthMeter(DefaultBandwidthMeter.getSingletonInstance(this))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
