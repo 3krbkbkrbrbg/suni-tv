@@ -11,8 +11,8 @@ android {
         applicationId = "com.sunitv.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 16
-        versionName = "2.2.0"
+        versionCode = 17
+        versionName = "2.3.0"
         resourceConfigurations += listOf("en")
         vectorDrawables { useSupportLibrary = true }
         ndk {

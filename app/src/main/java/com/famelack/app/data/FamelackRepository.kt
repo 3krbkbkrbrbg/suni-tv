@@ -63,6 +63,37 @@ class FamelackRepository(private val context: Context) {
         while (keys.hasNext()) {
             val code = keys.next()
             val o = meta.optJSONObject(code) ?: continue
+            // Patch IR channelCount to include Farsi diaspora (otherwise list shows 57 but Iran has 91 TV Farsi total)
+            if (code.equals("IR", ignoreCase = true) && kind.slug in setOf("tv", "radio")) {
+                val patched = JSONObject(o.toString())
+                val base = root.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())?.length() ?: 0
+                val seen = mutableSetOf<String>()
+                val baseArr = root.optJSONObject(kind.slug)?.optJSONObject("by_country")?.optJSONArray(code.lowercase())
+                if (baseArr != null) {
+                    for (i in 0 until baseArr.length()) {
+                        seen.add(baseArr.optJSONObject(i)?.optString("nanoid") ?: "")
+                    }
+                }
+                var extra = 0
+                val allArr = root.optJSONObject(kind.slug)?.optJSONObject("by_category")?.optJSONArray("all")
+                if (allArr != null) {
+                    for (i in 0 until allArr.length()) {
+                        val obj = allArr.optJSONObject(i) ?: continue
+                        val langs = obj.optJSONArray("languages") ?: continue
+                        var hasFas = false
+                        for (j in 0 until langs.length()) {
+                            if (langs.optString(j).equals("fas", ignoreCase = true)) { hasFas = true; break }
+                        }
+                        if (!hasFas) continue
+                        val nid = obj.optString("nanoid")
+                        if (nid.isNotEmpty() && seen.add(nid)) extra++
+                    }
+                }
+                patched.put("channelCount", base + extra)
+                patched.put("hasChannels", (base + extra) > 0)
+                list.add(CountryInfo.fromJson(code, patched))
+                continue
+            }
             list.add(CountryInfo.fromJson(code, o))
         }
         return list.sortedWith(
@@ -75,6 +106,7 @@ class FamelackRepository(private val context: Context) {
     /**
      * Channels for a given country code. Handles case-insensitivity:
      * meta keys are uppercase (e.g. "IR"), but by_country keys are lowercase (e.g. "ir").
+     * For Iran (ir/IR), also includes all Farsi channels from diaspora (US, GB, AE, etc.) and domestic counts.
      */
     fun channelsByCountry(kind: MediaKind, code: String): List<Channel> {
         val r = root ?: return emptyList()
@@ -85,11 +117,38 @@ class FamelackRepository(private val context: Context) {
         val arr = byCountry.optJSONArray(lowerCode)
             ?: byCountry.optJSONArray(code)
             ?: byCountry.optJSONArray(upperCode)
-            ?: return emptyList()
 
-        return (0 until arr.length()).mapNotNull { idx ->
-            arr.optJSONObject(idx)?.let { Channel.fromJson(it) }
+        val base = if (arr != null) {
+            (0 until arr.length()).mapNotNull { idx ->
+                arr.optJSONObject(idx)?.let { Channel.fromJson(it) }
+            }
+        } else mutableListOf()
+
+        // For IR: merge diaspora + homeland (all Farsi) so Iran list covers all Persian channels (inside + outside)
+        if (lowerCode == "ir" && kind.slug in setOf("tv", "radio")) {
+            val seen = base.mapNotNull { it.nanoid }.toMutableSet()
+            val allArr = r.optJSONObject(kind.slug)?.optJSONObject("by_category")?.optJSONArray("all")
+            if (allArr != null) {
+                for (i in 0 until allArr.length()) {
+                    val obj = allArr.optJSONObject(i) ?: continue
+                    val langs = obj.optJSONArray("languages") ?: continue
+                    var hasFas = false
+                    for (j in 0 until langs.length()) {
+                        if (langs.optString(j).equals("fas", ignoreCase = true)) { hasFas = true; break }
+                    }
+                    if (!hasFas) continue
+                    val ch = Channel.fromJson(obj)
+                    val id = ch.nanoid
+                    if (id.isNotEmpty() && seen.add(id)) {
+                        (base as MutableList).add(ch)
+                    }
+                }
+            }
+            // Stable sort by name for deterministic UI
+            if (base is MutableList) base.sortBy { it.name.lowercase() }
         }
+
+        return base
     }
 
     fun channelsByCategory(kind: MediaKind, category: String): List<Channel> {
