@@ -69,10 +69,10 @@ fun MiniPlayerBar(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (channel.isYoutube) "YT" else codeToFlag(channel.country.uppercase()),
+                    text = if (channel.isYoutubeOnly) "YT" else codeToFlag(channel.country.uppercase()),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (channel.isYoutube) Color.Red else Color.White
+                    color = if (channel.isYoutubeOnly) Color.Red else Color.White
                 )
             }
 

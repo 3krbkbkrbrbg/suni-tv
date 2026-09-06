@@ -173,6 +173,10 @@ object PlayerHolder {
         _lastErrorFlow.value = "Playback error: ${error.errorCodeName} (${error.message ?: "Connection dropped"})"
     }
 
+    fun setCustomError(msg: String?) {
+        _lastErrorFlow.value = msg
+    }
+
     fun setQuality(quality: StreamQuality) {
         currentQuality = quality
         val c = controller ?: return

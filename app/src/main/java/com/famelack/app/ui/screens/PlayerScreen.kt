@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -34,11 +36,14 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -103,6 +108,9 @@ fun PlayerScreen(
     var isProxyActive by remember { mutableStateOf(ProxyConfig.isProxyEnabled) }
     var showProxyDialog by remember { mutableStateOf(false) }
 
+    // If channel has only YouTube, default to YouTube mode; otherwise default to HLS stream
+    var showYoutubeMode by remember(channel.id) { mutableStateOf(channel.isYoutubeOnly) }
+
     val lastError by PlayerHolder.lastErrorFlow.collectAsState()
 
     LaunchedEffect(channel.id) {
@@ -110,7 +118,7 @@ fun PlayerScreen(
     }
 
     fun startPlayback() {
-        if (!channel.isYoutube && !channel.streamUrls.isNullOrEmpty()) {
+        if (!showYoutubeMode && channel.hasStreams) {
             PlayerHolder.playStream(
                 context = context,
                 url = channel.streamUrls.first(),
@@ -120,11 +128,34 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(channel.id) {
+    LaunchedEffect(channel.id, showYoutubeMode) {
         PlayerHolder.bind(context) { ctrl ->
             controller = ctrl
         }
-        startPlayback()
+        if (!showYoutubeMode) {
+            startPlayback()
+        } else {
+            PlayerHolder.pause()
+        }
+    }
+
+    fun launchYouTubeApp() {
+        val yId = channel.youtubeId ?: return
+        val ytUri = Uri.parse("https://www.youtube.com/watch?v=$yId")
+        val intent = Intent(Intent.ACTION_VIEW, ytUri).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            intent.setPackage("com.google.android.youtube")
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                intent.setPackage(null)
+                context.startActivity(Intent.createChooser(intent, "پخش در برنامه یوتیوب"))
+            } catch (e: Exception) {
+                Toast.makeText(context, "برنامه‌ای برای باز کردن یوتیوب پیدا نشد", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     Box(
@@ -179,7 +210,7 @@ fun PlayerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 when {
-                    channel.isYoutube && channel.youtubeId != null -> {
+                    showYoutubeMode && channel.youtubeId != null -> {
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { ctx ->
@@ -195,9 +226,34 @@ fun PlayerScreen(
                                         loadWithOverviewMode = true
                                         useWideViewPort = true
                                         cacheMode = WebSettings.LOAD_DEFAULT
+                                        allowFileAccess = false
+                                        allowContentAccess = false
+                                        databaseEnabled = true
                                         userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
                                     }
-                                    webViewClient = WebViewClient()
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                            val uri = request?.url ?: return false
+                                            val uriStr = uri.toString()
+                                            if (uriStr.contains("youtube.com/watch") || uriStr.contains("youtu.be/")) {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+                                                    context.startActivity(intent)
+                                                    return true
+                                                } catch (_: Exception) {}
+                                            }
+                                            return false
+                                        }
+
+                                        override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                                            super.onReceivedError(view, request, error)
+                                            if (request?.isForMainFrame == true) {
+                                                PlayerHolder.setCustomError("پلیر یوتیوب لود نشد (از دکمه قرمز پایین برای باز کردن در برنامه یوتیوب استفاده کنید)")
+                                            }
+                                        }
+                                    }
                                     webChromeClient = WebChromeClient()
 
                                     val html = """
@@ -206,26 +262,27 @@ fun PlayerScreen(
                                         <head>
                                             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                                             <style>
-                                                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; }
+                                                * { margin: 0; padding: 0; box-sizing: border-box; }
+                                                html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
                                                 iframe { width: 100%; height: 100%; border: 0; }
                                             </style>
                                         </head>
                                         <body>
                                             <iframe 
-                                                src="https://www.youtube-nocookie.com/embed/${channel.youtubeId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&modestbranding=1" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                src="https://www.youtube-nocookie.com/embed/${channel.youtubeId}?autoplay=1&playsinline=1&enablejsapi=1&origin=https://famelack.com&widget_referrer=https://famelack.com&rel=0&modestbranding=1" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                                                 allowfullscreen>
                                             </iframe>
                                         </body>
                                         </html>
                                     """.trimIndent()
-                                    loadDataWithBaseURL("https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null)
+                                    loadDataWithBaseURL("https://famelack.com", html, "text/html", "UTF-8", null)
                                 }
                             }
                         )
                     }
 
-                    !channel.streamUrls.isNullOrEmpty() -> {
+                    channel.hasStreams -> {
                         AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = { ctx ->
@@ -266,6 +323,57 @@ fun PlayerScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
+                // If channel has YouTube ID, show 1-click YouTube App button
+                if (channel.youtubeId != null) {
+                    Button(
+                        onClick = { launchYouTubeApp() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("پخش مستقیم در برنامه یوتیوب (YouTube App)", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                // If channel has BOTH HLS and YouTube, provide stream source switcher
+                if (channel.hasStreams && channel.youtubeId != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = !showYoutubeMode,
+                            onClick = {
+                                showYoutubeMode = false
+                                startPlayback()
+                            },
+                            label = { Text("پخش HLS (پلیر داخلی)") },
+                            leadingIcon = if (!showYoutubeMode) {
+                                { Icon(Icons.Filled.LiveTv, null, modifier = Modifier.size(16.dp)) }
+                            } else null,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = showYoutubeMode,
+                            onClick = {
+                                showYoutubeMode = true
+                                PlayerHolder.pause()
+                            },
+                            label = { Text("پخش یوتیوب (YouTube)") },
+                            leadingIcon = if (showYoutubeMode) {
+                                { Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(16.dp)) }
+                            } else null,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+
                 // Error Alert Banner (if stream failed)
                 lastError?.let { err ->
                     Card(
@@ -285,7 +393,7 @@ fun PlayerScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "خطای پخش: استریم در دسترس نیست یا فیلتر شده است",
+                                    text = "خطای پخش استریم",
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     fontSize = 12.sp
@@ -295,10 +403,19 @@ fun PlayerScreen(
                             Text(
                                 text = err,
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                             )
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (channel.youtubeId != null) {
+                                    Button(
+                                        onClick = { launchYouTubeApp() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                        modifier = Modifier.height(34.dp)
+                                    ) {
+                                        Text("باز کردن در یوتیوب", fontSize = 11.sp)
+                                    }
+                                }
                                 FilledTonalButton(
                                     onClick = { showProxyDialog = true },
                                     modifier = Modifier.height(34.dp)
@@ -308,7 +425,13 @@ fun PlayerScreen(
                                     Text("تنظیم پروکسی", fontSize = 11.sp)
                                 }
                                 OutlinedButton(
-                                    onClick = { startPlayback() },
+                                    onClick = {
+                                        if (showYoutubeMode) {
+                                            Toast.makeText(context, "بارگذاری مجدد...", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            startPlayback()
+                                        }
+                                    },
                                     modifier = Modifier.height(34.dp)
                                 ) {
                                     Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -320,8 +443,8 @@ fun PlayerScreen(
                     }
                 }
 
-                // Quality Selector (Data Saver)
-                if (!channel.isYoutube) {
+                // Quality Selector (Data Saver) — only applicable to native HLS streams
+                if (!showYoutubeMode && channel.hasStreams) {
                     Text(
                         text = "Quality / Data Saver (کاهش مصرف اینترنت)",
                         style = MaterialTheme.typography.titleSmall,
@@ -464,21 +587,27 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (!channel.isYoutube && !channel.streamUrls.isNullOrEmpty()) {
-                        FilledTonalButton(
-                            onClick = {
+                    FilledTonalButton(
+                        onClick = {
+                            if (showYoutubeMode) {
+                                Toast.makeText(context, "بارگذاری مجدد...", Toast.LENGTH_SHORT).show()
+                            } else {
                                 startPlayback()
-                                Toast.makeText(context, "Reconnecting...", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Reconnect")
-                        }
+                                Toast.makeText(context, "اتصال مجدد...", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Reconnect")
+                    }
 
-                        OutlinedButton(
-                            onClick = {
+                    OutlinedButton(
+                        onClick = {
+                            if (showYoutubeMode || channel.isYoutubeOnly) {
+                                launchYouTubeApp()
+                            } else {
                                 val url = channel.primaryUrl ?: return@OutlinedButton
                                 val effective = ProxyConfig.getEffectiveUrl(url)
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -490,13 +619,13 @@ fun PlayerScreen(
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "No external player found", Toast.LENGTH_SHORT).show()
                                 }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("VLC / External")
-                        }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (showYoutubeMode || channel.isYoutubeOnly) "YouTube App" else "VLC / External")
                     }
                 }
 
@@ -514,7 +643,7 @@ fun PlayerScreen(
 
                 // Stream URL + Copy Button
                 channel.primaryUrl?.let { streamUrl ->
-                    val effective = ProxyConfig.getEffectiveUrl(streamUrl)
+                    val effective = if (showYoutubeMode) streamUrl else ProxyConfig.getEffectiveUrl(streamUrl)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -535,7 +664,7 @@ fun PlayerScreen(
                             onClick = {
                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 cm.setPrimaryClip(ClipData.newPlainText("Stream URL", effective))
-                                Toast.makeText(context, "Copied stream URL", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Copied link", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(32.dp)
                         ) {

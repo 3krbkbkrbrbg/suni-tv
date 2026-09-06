@@ -25,10 +25,12 @@ data class Channel(
     val streamUrls: List<String>,
     val youtubeId: String?
 ) {
+    val hasStreams: Boolean get() = streamUrls.isNotEmpty()
+    val isYoutubeOnly: Boolean get() = streamUrls.isEmpty() && youtubeId != null
     val isYoutube: Boolean get() = youtubeId != null
     val primaryUrl: String?
         get() = when {
-            !streamUrls.isNullOrEmpty() -> streamUrls.first()
+            streamUrls.isNotEmpty() -> streamUrls.first()
             youtubeId != null -> "https://www.youtube.com/watch?v=$youtubeId"
             else -> null
         }

@@ -88,7 +88,7 @@ fun FavoritesScreen(onPlay: (Channel) -> Unit) {
                         channel = ch,
                         isFavorite = true,
                         onClick = {
-                            if (ch.isYoutube) {
+                            if (ch.isYoutubeOnly) {
                                 onPlay(ch)
                             } else {
                                 val url = ch.primaryUrl ?: return@ChannelRow

@@ -140,7 +140,7 @@ fun BrowseScreen(
                         ChannelRow(
                             channel = ch,
                             onClick = {
-                                if (ch.isYoutube) {
+                                if (ch.isYoutubeOnly) {
                                     onPlay(ch)
                                 } else {
                                     val url = ch.primaryUrl ?: return@ChannelRow
@@ -185,7 +185,7 @@ fun BrowseScreen(
                     onClick = {
                         val ch = repo.randomChannel(kind)
                         if (ch != null) {
-                            if (ch.isYoutube) {
+                            if (ch.isYoutubeOnly) {
                                 onPlay(ch)
                             } else {
                                 val url = ch.primaryUrl
@@ -249,7 +249,7 @@ fun BrowseScreen(
                         ChannelRow(
                             channel = ch,
                             onClick = {
-                                if (ch.isYoutube) {
+                                if (ch.isYoutubeOnly) {
                                     onPlay(ch)
                                 } else {
                                     val url = ch.primaryUrl ?: return@ChannelRow

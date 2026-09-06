@@ -58,7 +58,7 @@ fun ChannelRow(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            if (channel.isYoutube) {
+            if (channel.isYoutubeOnly) {
                 Text("YT", fontWeight = FontWeight.Bold, color = Color(0xFFFF0000))
             } else {
                 Text(
@@ -78,7 +78,7 @@ fun ChannelRow(
                 overflow = TextOverflow.Ellipsis
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (channel.isYoutube) {
+                if (channel.isYoutubeOnly) {
                     Text(
                         "YouTube Live",
                         style = MaterialTheme.typography.bodySmall,
