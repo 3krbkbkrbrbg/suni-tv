@@ -3,6 +3,9 @@ package com.famelack.app.player
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.InetSocketAddress
@@ -20,10 +23,16 @@ object AetherManager {
 
     private var process: Process? = null
 
+    private val _statusFlow = MutableStateFlow("غیرفعال")
+    val statusFlow: StateFlow<String> = _statusFlow.asStateFlow()
+
+    private val _lastLogFlow = MutableStateFlow("")
+    val lastLogFlow: StateFlow<String> = _lastLogFlow.asStateFlow()
+
     fun isPortOpen(port: Int = DEFAULT_PORT): Boolean {
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress("127.0.0.1", port), 400)
+                socket.connect(InetSocketAddress("127.0.0.1", port), 350)
                 true
             }
         } catch (_: Exception) {
@@ -31,53 +40,94 @@ object AetherManager {
         }
     }
 
-    suspend fun ensureStarted(context: Context, port: Int = DEFAULT_PORT) = withContext(Dispatchers.IO) {
+    suspend fun ensureStarted(context: Context, port: Int = DEFAULT_PORT): Boolean = withContext(Dispatchers.IO) {
         if (isPortOpen(port)) {
             Log.d(TAG, "Aether SOCKS5 already running on port $port")
-            return@withContext
+            _statusFlow.value = "فعال (روی پورت $port)"
+            return@withContext true
         }
 
-        val binary = findAetherBinary(context)
+        val binary = prepareNative(context, "libaether.so")
         if (binary == null || !binary.exists()) {
-            Log.w(TAG, "Aether binary (libaether.so) not found in native library directory")
-            return@withContext
+            val err = "فایل باینری libaether.so در دستگاه یافت نشد"
+            Log.w(TAG, err)
+            _statusFlow.value = err
+            _lastLogFlow.value = err
+            return@withContext false
         }
 
         try {
-            binary.setExecutable(true, false)
+            val workDir = File(context.filesDir, "aether_data").apply { mkdirs() }
+            val configFile = File(workDir, "aether.toml")
+
             val cmd = arrayOf(
                 binary.absolutePath,
                 "--masque",
                 "-4",
-                "--scan", "balanced",
+                "--turbo",
                 "--noize", "balanced",
+                "--config", configFile.absolutePath,
                 "--bind", "127.0.0.1:$port"
             )
-            Log.i(TAG, "Starting Aether MASQUE process: ${cmd.joinToString(" ")}")
-            process = ProcessBuilder(*cmd)
-                .redirectErrorStream(true)
-                .start()
 
-            // Drain output in background to keep process pipe clear
+            Log.i(TAG, "Starting Aether MASQUE: ${cmd.joinToString(" ")}")
+            _statusFlow.value = "در حال راه‌اندازی و اسکن سرورها..."
+
+            val builder = ProcessBuilder(*cmd)
+                .directory(workDir)
+                .redirectErrorStream(true)
+
+            builder.environment().apply {
+                put("HOME", workDir.absolutePath)
+                put("TMPDIR", context.cacheDir.absolutePath)
+                put("AETHER_SOCKS", "127.0.0.1:$port")
+            }
+
+            val proc = builder.start()
+            process = proc
+
+            // Read output logs in background
             Thread {
                 try {
-                    process?.inputStream?.bufferedReader()?.forEachLine { line ->
-                        Log.d("AetherOutput", line)
+                    proc.inputStream.bufferedReader().forEachLine { line ->
+                        Log.d("AetherLog", line)
+                        _lastLogFlow.value = line
+                        if (line.contains("listening") || line.contains("1819") || line.contains("connected") || line.contains("ready")) {
+                            _statusFlow.value = "متصل شد"
+                        }
                     }
                 } catch (_: Exception) {}
             }.start()
 
-            // Poll port up to 4 seconds
-            val deadline = System.currentTimeMillis() + 4000
+            // Poll port up to 12 seconds
+            val deadline = System.currentTimeMillis() + 12000
             while (System.currentTimeMillis() < deadline) {
-                if (isPortOpen(port)) {
-                    Log.i(TAG, "Aether MASQUE successfully listening on 127.0.0.1:$port")
-                    break
+                if (!proc.isAlive) {
+                    val exit = try { proc.exitValue() } catch (_: Exception) { -1 }
+                    val msg = "Aether متوقف شد (کد خروج $exit): ${_lastLogFlow.value}"
+                    Log.e(TAG, msg)
+                    _statusFlow.value = msg
+                    return@withContext false
                 }
-                Thread.sleep(250)
+
+                if (isPortOpen(port)) {
+                    Log.i(TAG, "Aether MASQUE successfully open on 127.0.0.1:$port")
+                    _statusFlow.value = "فعال و متصل (پورت $port)"
+                    return@withContext true
+                }
+                Thread.sleep(300)
             }
+
+            val timeoutMsg = "تایم‌اوت اتصال (پورت $port هنوز پاسخ نداد)"
+            _statusFlow.value = timeoutMsg
+            Log.w(TAG, timeoutMsg)
+            return@withContext isPortOpen(port)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start Aether MASQUE process", e)
+            val err = "خطا در استارت Aether: ${e.message}"
+            Log.e(TAG, err, e)
+            _statusFlow.value = err
+            _lastLogFlow.value = err
+            return@withContext false
         }
     }
 
@@ -85,14 +135,24 @@ object AetherManager {
         try {
             process?.destroy()
             process = null
+            _statusFlow.value = "متوقف شد"
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping Aether", e)
         }
     }
 
-    private fun findAetherBinary(context: Context): File? {
-        val nativeDir = File(context.applicationInfo.nativeLibraryDir)
-        val file = File(nativeDir, "libaether.so")
-        return if (file.exists()) file else null
+    private fun prepareNative(context: Context, libName: String): File? {
+        val dir = context.applicationInfo.nativeLibraryDir
+        val lib = File(dir, libName)
+        if (lib.exists() && lib.isFile && lib.length() > 0) {
+            if (!lib.canExecute()) {
+                try {
+                    ProcessBuilder("chmod", "755", lib.absolutePath).start().waitFor()
+                } catch (_: Exception) {}
+                lib.setExecutable(true, false)
+            }
+            return lib
+        }
+        return null
     }
 }

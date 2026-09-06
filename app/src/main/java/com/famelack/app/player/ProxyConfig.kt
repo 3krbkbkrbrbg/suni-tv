@@ -127,7 +127,10 @@ object ProxyConfig {
     suspend fun testConnection(context: Context? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         if (proxyMode == ProxyMode.AETHER_MASQUE && context != null) {
             if (!AetherManager.isPortOpen(aetherPort)) {
-                AetherManager.ensureStarted(context, aetherPort)
+                val started = AetherManager.ensureStarted(context, aetherPort)
+                if (!started) {
+                    return@withContext Pair(false, AetherManager.statusFlow.value)
+                }
             }
         }
 

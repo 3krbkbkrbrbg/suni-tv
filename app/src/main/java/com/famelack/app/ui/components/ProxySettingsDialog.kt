@@ -44,6 +44,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -169,6 +170,9 @@ fun ProxySettingsDialog(
                 // Input fields per mode
                 when (selectedMode) {
                     ProxyMode.AETHER_MASQUE -> {
+                        val aetherStatus by AetherManager.statusFlow.collectAsState()
+                        val aetherLog by AetherManager.lastLogFlow.collectAsState()
+
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -180,19 +184,28 @@ fun ProxySettingsDialog(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (aetherRunning) Color(0xFF00E676) else Color.Gray)
+                                            .background(if (aetherRunning) Color(0xFF00E676) else Color(0xFFFFB74D))
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = if (aetherRunning) "سرویس Aether فعال است (127.0.0.1:$aetherPort)" else "آماده اتصال به تونل Aether MASQUE",
+                                        text = aetherStatus,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (aetherRunning) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (aetherRunning) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                if (aetherLog.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = aetherLog,
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2
                                     )
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = "پروکسی آزاد MASQUE بر پایه HTTP/3 کلودفلر؛ نیازی به سرور خارجی یا کانفیگ ندارد و به صورت خودکار تونل ضد فیلتر برقرار می‌کند.",
+                                    text = "پروتکل MASQUE بر پایه HTTP/3 کلودفلر؛ نیازی به سرور خارجی یا کانفیگ ندارد و به صورت خودکار با حالت Turbo تونل می‌زند.",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -214,18 +227,37 @@ fun ProxySettingsDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
 
+                        Spacer(Modifier.height(8.dp))
+
+                        FilledTonalButton(
+                            onClick = {
+                                scope.launch {
+                                    val port = aetherPort.toIntOrNull() ?: 1819
+                                    AetherManager.ensureStarted(context, port)
+                                    aetherRunning = AetherManager.isPortOpen(port)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("راه‌اندازی فوری تونل Aether MASQUE", fontSize = 11.sp)
+                        }
+
                         Spacer(Modifier.height(6.dp))
 
                         // Check if Aether Android app is installed
                         val aetherAppIntent = remember { context.packageManager.getLaunchIntentForPackage("com.cluvex.aether") }
                         if (aetherAppIntent != null) {
-                            FilledTonalButton(
+                            OutlinedButton(
                                 onClick = { context.startActivity(aetherAppIntent) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(38.dp)
                             ) {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("باز کردن اپلیکیشن Aether", fontSize = 11.sp)
                             }
