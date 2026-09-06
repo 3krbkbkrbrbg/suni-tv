@@ -2,10 +2,10 @@ name: Build Suni TV Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, source ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, source ]
   workflow_dispatch:
 
 jobs:
