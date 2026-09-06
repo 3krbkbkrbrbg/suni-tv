@@ -1,5 +1,6 @@
 package com.famelack.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -97,6 +98,15 @@ fun FamelackApp() {
     // Modal overlay for full screen experience
     playerChannel?.let { ch ->
         PlayerScreen(channel = ch, onClose = { playerChannel = null })
+    }
+
+    // System back navigation handling
+    BackHandler(enabled = playerChannel != null) {
+        playerChannel = null
+    }
+
+    BackHandler(enabled = playerChannel == null && currentTab != TopTab.TV) {
+        currentTab = TopTab.TV
     }
 }
 

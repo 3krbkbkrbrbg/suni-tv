@@ -11,8 +11,8 @@ android {
         applicationId = "com.famelack.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.0"
+        versionCode = 13
+        versionName = "1.2.1"
         resourceConfigurations += listOf("en")
         vectorDrawables { useSupportLibrary = true }
         ndk {

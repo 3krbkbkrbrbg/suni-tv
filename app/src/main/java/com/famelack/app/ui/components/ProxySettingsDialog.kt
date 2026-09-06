@@ -83,6 +83,7 @@ fun ProxySettingsDialog(
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var isFcaeRunning by remember { mutableStateOf(false) }
+    var showLogs by remember { mutableStateOf(false) }
 
     val fcaeStatus by FcaeVpnManager.statusFlow.collectAsState()
 
@@ -267,6 +268,44 @@ fun ProxySettingsDialog(
                                 Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(6.dp))
                                 Text("دانلود برنامه FCAE VPN v1.2.9 از گیت‌هاب", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                            }
+                        }
+
+                        val engineLogs by FcaeVpnManager.engineLogsFlow.collectAsState()
+                        if (engineLogs.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showLogs = !showLogs }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    if (showLogs) "▲ بستن لاگ‌های دیباگ" else "▼ مشاهده لاگ‌های دیباگ موتور FCAE",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            if (showLogs) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF101418),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(130.dp)
+                                ) {
+                                    Text(
+                                        text = engineLogs,
+                                        color = Color(0xFF80D8FF),
+                                        fontSize = 9.sp,
+                                        lineHeight = 12.sp,
+                                        modifier = Modifier
+                                            .padding(6.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    )
+                                }
                             }
                         }
                     }

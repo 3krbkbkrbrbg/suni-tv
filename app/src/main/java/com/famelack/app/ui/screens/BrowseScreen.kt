@@ -1,5 +1,6 @@
 package com.famelack.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,6 +92,15 @@ fun BrowseScreen(
     LaunchedEffect(searchQuery, kind) {
         searchResults = if (searchQuery.isBlank()) emptyList()
         else repo.search(kind, searchQuery, limit = 300)
+    }
+
+    // Intercept back gesture / button
+    BackHandler(enabled = selectedCountry != null) {
+        selectedCountry = null
+    }
+
+    BackHandler(enabled = selectedCountry == null && searchQuery.isNotBlank()) {
+        searchQuery = ""
     }
 
     Column(Modifier.fillMaxSize()) {
