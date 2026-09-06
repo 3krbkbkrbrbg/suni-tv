@@ -24,8 +24,8 @@ object WebViewProxyManager {
      * Falls back to direct if WebKit ProxyController is not available.
      */
     fun setProxy(host: String, port: Int) {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY)) {
-            Log.w(TAG, "WebViewFeature.PROXY not supported on this device — WebView will not use proxy")
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            Log.w(TAG, "WebViewFeature.PROXY_OVERRIDE not supported on this device — WebView will not use proxy")
             return
         }
 
@@ -44,15 +44,9 @@ object WebViewProxyManager {
             ProxyController.getInstance().setProxyOverride(
                 config,
                 Runnable::run,
-                object : ProxyController.ProxyListener {
-                    override fun onCount(count: Int) {
-                        Log.i(TAG, "WebView proxy set to $rule — $count connections routed")
-                        activeHost = rule
-                    }
-                    override fun onError(error: String) {
-                        Log.e(TAG, "Failed to set WebView proxy: $error")
-                        activeHost = null
-                    }
+                {
+                    Log.i(TAG, "WebView proxy set to $rule")
+                    activeHost = rule
                 }
             )
         } catch (e: Exception) {
@@ -65,25 +59,15 @@ object WebViewProxyManager {
      * Reset WebView proxy to direct (no proxy).
      */
     fun clearProxy() {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY)) return
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) return
         if (activeHost == null) return
 
         try {
-            val config = ProxyConfig.Builder()
-                .addDirect()
-                .build()
-
-            ProxyController.getInstance().setProxyOverride(
-                config,
+            ProxyController.getInstance().clearProxyOverride(
                 Runnable::run,
-                object : ProxyController.ProxyListener {
-                    override fun onCount(count: Int) {
-                        Log.i(TAG, "WebView proxy cleared — $count connections direct")
-                        activeHost = null
-                    }
-                    override fun onError(error: String) {
-                        Log.e(TAG, "Failed to clear WebView proxy: $error")
-                    }
+                {
+                    Log.i(TAG, "WebView proxy cleared — direct connection")
+                    activeHost = null
                 }
             )
         } catch (e: Exception) {
