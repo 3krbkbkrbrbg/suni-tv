@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
@@ -41,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,12 +51,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.famelack.app.player.AetherManager
 import com.famelack.app.player.ProxyConfig
 import com.famelack.app.player.ProxyMode
 import kotlinx.coroutines.launch
@@ -68,6 +73,7 @@ fun ProxySettingsDialog(
 
     var isEnabled by remember { mutableStateOf(ProxyConfig.isProxyEnabled) }
     var selectedMode by remember { mutableStateOf(ProxyConfig.proxyMode) }
+    var aetherPort by remember { mutableStateOf(ProxyConfig.aetherPort.toString()) }
     var relayUrl by remember { mutableStateOf(ProxyConfig.relayUrl) }
     var socksPort by remember { mutableStateOf(ProxyConfig.localSocksPort.toString()) }
     var httpPort by remember { mutableStateOf(ProxyConfig.localHttpPort.toString()) }
@@ -75,6 +81,11 @@ fun ProxySettingsDialog(
 
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    var aetherRunning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        aetherRunning = AetherManager.isPortOpen(aetherPort.toIntOrNull() ?: 1819)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -157,6 +168,87 @@ fun ProxySettingsDialog(
 
                 // Input fields per mode
                 when (selectedMode) {
+                    ProxyMode.AETHER_MASQUE -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(if (aetherRunning) Color(0xFF00E676) else Color.Gray)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (aetherRunning) "سرویس Aether فعال است (127.0.0.1:$aetherPort)" else "آماده اتصال به تونل Aether MASQUE",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (aetherRunning) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "پروکسی آزاد MASQUE بر پایه HTTP/3 کلودفلر؛ نیازی به سرور خارجی یا کانفیگ ندارد و به صورت خودکار تونل ضد فیلتر برقرار می‌کند.",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = aetherPort,
+                            onValueChange = {
+                                aetherPort = it
+                                aetherRunning = AetherManager.isPortOpen(it.toIntOrNull() ?: 1819)
+                            },
+                            label = { Text("پورت SOCKS5 Aether") },
+                            placeholder = { Text("1819 (پیش‌فرض Aether)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        // Check if Aether Android app is installed
+                        val aetherAppIntent = remember { context.packageManager.getLaunchIntentForPackage("com.cluvex.aether") }
+                        if (aetherAppIntent != null) {
+                            FilledTonalButton(
+                                onClick = { context.startActivity(aetherAppIntent) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(38.dp)
+                            ) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("باز کردن اپلیکیشن Aether", fontSize = 11.sp)
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val intent = Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://github.com/3krbkbkrbrbg/aether-android")
+                                        )
+                                        context.startActivity(intent)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(6.dp))
+                                Text("مشاهده سورس Aether Android در گیت‌هاب", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                            }
+                        }
+                    }
                     ProxyMode.URL_RELAY -> {
                         OutlinedTextField(
                             value = relayUrl,
@@ -167,7 +259,6 @@ fun ProxySettingsDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(6.dp))
-                        // Helper button to open GitHub repo with 1-click deploy
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -247,26 +338,28 @@ fun ProxySettingsDialog(
                             isTesting = true
                             testResult = null
                             scope.launch {
-                                // Temporarily apply values to test
                                 val prevEnabled = ProxyConfig.isProxyEnabled
                                 val prevMode = ProxyConfig.proxyMode
+                                val prevAether = ProxyConfig.aetherPort
                                 val prevRelay = ProxyConfig.relayUrl
                                 val prevSocks = ProxyConfig.localSocksPort
                                 val prevHttp = ProxyConfig.localHttpPort
 
                                 ProxyConfig.isProxyEnabled = true
                                 ProxyConfig.proxyMode = selectedMode
+                                ProxyConfig.aetherPort = aetherPort.toIntOrNull() ?: 1819
                                 ProxyConfig.relayUrl = relayUrl
                                 ProxyConfig.localSocksPort = socksPort.toIntOrNull() ?: 10808
                                 ProxyConfig.localHttpPort = httpPort.toIntOrNull() ?: 10809
 
-                                val res = ProxyConfig.testConnection()
+                                val res = ProxyConfig.testConnection(context)
                                 testResult = res
+                                aetherRunning = AetherManager.isPortOpen(ProxyConfig.aetherPort)
                                 isTesting = false
 
-                                // Restore
                                 ProxyConfig.isProxyEnabled = prevEnabled
                                 ProxyConfig.proxyMode = prevMode
+                                ProxyConfig.aetherPort = prevAether
                                 ProxyConfig.relayUrl = prevRelay
                                 ProxyConfig.localSocksPort = prevSocks
                                 ProxyConfig.localHttpPort = prevHttp
@@ -315,11 +408,17 @@ fun ProxySettingsDialog(
                 onClick = {
                     ProxyConfig.isProxyEnabled = isEnabled
                     ProxyConfig.proxyMode = selectedMode
+                    ProxyConfig.aetherPort = aetherPort.toIntOrNull() ?: 1819
                     ProxyConfig.relayUrl = relayUrl.trim()
                     ProxyConfig.localSocksPort = socksPort.toIntOrNull() ?: 10808
                     ProxyConfig.localHttpPort = httpPort.toIntOrNull() ?: 10809
                     ProxyConfig.autoFallbackToDirect = autoFallback
                     ProxyConfig.save(context)
+                    if (isEnabled && selectedMode == ProxyMode.AETHER_MASQUE) {
+                        scope.launch {
+                            AetherManager.ensureStarted(context, ProxyConfig.aetherPort)
+                        }
+                    }
                     onSaved()
                     onDismiss()
                 }

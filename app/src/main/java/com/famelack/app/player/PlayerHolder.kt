@@ -115,6 +115,14 @@ object PlayerHolder {
             _currentChannelFlow.value = channel
         }
 
+        if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.AETHER_MASQUE) {
+            Thread {
+                kotlinx.coroutines.runBlocking {
+                    AetherManager.ensureStarted(context, ProxyConfig.aetherPort)
+                }
+            }.start()
+        }
+
         isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
         val targetUrl = ProxyConfig.getEffectiveUrl(url)
         playUrlInternal(context, targetUrl, title)

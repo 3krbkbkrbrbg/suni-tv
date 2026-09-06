@@ -12,32 +12,35 @@ import java.net.Proxy
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-enum class ProxyMode(val label: String, val desc: String) {
-    URL_RELAY("Stream Relay (Vercel/Worker)", "Routes stream via your Vercel or Cloudflare Worker URL"),
-    LOCAL_SOCKS5("Local SOCKS5 (V2RayNG)", "Routes via local VPN/v2ray proxy on 127.0.0.1:10808"),
-    LOCAL_HTTP("Local HTTP Proxy", "Routes via local HTTP proxy on 127.0.0.1:10809")
+enum class ProxyMode(val label: String, val desc: String, val defaultPort: Int) {
+    AETHER_MASQUE("Aether MASQUE (پروکسی هوشمند)", "پروکسی آزاد MASQUE بر پایه HTTP/3 و کلودفلر (127.0.0.1:1819)", 1819),
+    LOCAL_SOCKS5("SOCKS5 (V2RayNG)", "پروکسی محلی SOCKS5 روی 127.0.0.1:10808", 10808),
+    LOCAL_HTTP("HTTP Proxy", "پروکسی محلی HTTP روی 127.0.0.1:10809", 10809),
+    URL_RELAY("Stream Relay (Vercel/Worker)", "رله آنلاین HLS روی ورسل یا کلودفلر", 0)
 }
 
 /**
  * Proxy configuration for bypassing stream blocks, filtering, and geo-restrictions.
  * Supports:
- * 1. URL Relay (Vercel Edge / Cloudflare Worker / VPS)
- * 2. Local SOCKS5 Proxy (V2RayNG / Nekobox / Clash / Shadowsocks on 127.0.0.1:10808)
+ * 1. Aether MASQUE (HTTP/3 & HTTP/2 censorship-circumvention on 127.0.0.1:1819)
+ * 2. Local SOCKS5 Proxy (V2RayNG / Nekobox / Clash on 127.0.0.1:10808)
  * 3. Local HTTP Proxy (127.0.0.1:10809)
- * Settings persist to SharedPreferences.
+ * 4. URL Relay (Vercel Edge / Cloudflare Worker / VPS)
  */
 object ProxyConfig {
     private const val PREFS_NAME = "famelack_proxy_prefs"
     private const val KEY_ENABLED = "proxy_enabled"
     private const val KEY_MODE = "proxy_mode"
+    private const val KEY_AETHER_PORT = "aether_port"
     private const val KEY_RELAY_URL = "relay_url"
     private const val KEY_SOCKS_PORT = "socks_port"
     private const val KEY_HTTP_PORT = "http_port"
     private const val KEY_AUTO_FALLBACK = "auto_fallback"
 
     var isProxyEnabled: Boolean = false
-    var proxyMode: ProxyMode = ProxyMode.URL_RELAY
-    var relayUrl: String = "" // User's deployed Vercel or Worker URL: e.g. https://my-proxy.vercel.app/?url=
+    var proxyMode: ProxyMode = ProxyMode.AETHER_MASQUE
+    var aetherPort: Int = 1819
+    var relayUrl: String = ""
     var localSocksPort: Int = 10808
     var localHttpPort: Int = 10809
     var autoFallbackToDirect: Boolean = true
@@ -45,8 +48,9 @@ object ProxyConfig {
     fun init(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isProxyEnabled = prefs.getBoolean(KEY_ENABLED, false)
-        val modeName = prefs.getString(KEY_MODE, ProxyMode.URL_RELAY.name) ?: ProxyMode.URL_RELAY.name
-        proxyMode = try { ProxyMode.valueOf(modeName) } catch (_: Exception) { ProxyMode.URL_RELAY }
+        val modeName = prefs.getString(KEY_MODE, ProxyMode.AETHER_MASQUE.name) ?: ProxyMode.AETHER_MASQUE.name
+        proxyMode = try { ProxyMode.valueOf(modeName) } catch (_: Exception) { ProxyMode.AETHER_MASQUE }
+        aetherPort = prefs.getInt(KEY_AETHER_PORT, 1819)
         relayUrl = prefs.getString(KEY_RELAY_URL, "") ?: ""
         localSocksPort = prefs.getInt(KEY_SOCKS_PORT, 10808)
         localHttpPort = prefs.getInt(KEY_HTTP_PORT, 10809)
@@ -58,6 +62,7 @@ object ProxyConfig {
         prefs.edit()
             .putBoolean(KEY_ENABLED, isProxyEnabled)
             .putString(KEY_MODE, proxyMode.name)
+            .putInt(KEY_AETHER_PORT, aetherPort)
             .putString(KEY_RELAY_URL, relayUrl.trim())
             .putInt(KEY_SOCKS_PORT, localSocksPort)
             .putInt(KEY_HTTP_PORT, localHttpPort)
@@ -73,7 +78,6 @@ object ProxyConfig {
         if (proxyMode == ProxyMode.URL_RELAY) {
             val base = relayUrl.trim()
             if (base.isBlank()) {
-                // No proxy URL configured yet — do NOT break original stream!
                 return originalUrl
             }
             return try {
@@ -91,7 +95,7 @@ object ProxyConfig {
             }
         }
 
-        // For LOCAL_SOCKS5 and LOCAL_HTTP, the URL is handled at socket level in OkHttp
+        // For AETHER_MASQUE, SOCKS5 and HTTP, URL is handled via Socket Proxy in OkHttp
         return originalUrl
     }
 
@@ -99,6 +103,9 @@ object ProxyConfig {
         if (!isProxyEnabled) return null
         return try {
             when (proxyMode) {
+                ProxyMode.AETHER_MASQUE -> {
+                    Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", aetherPort))
+                }
                 ProxyMode.LOCAL_SOCKS5 -> {
                     Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", localSocksPort))
                 }
@@ -117,14 +124,20 @@ object ProxyConfig {
      * Test the configured proxy connectivity.
      * Returns Pair<Boolean, String> (isSuccess, message / latency).
      */
-    suspend fun testConnection(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    suspend fun testConnection(context: Context? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (proxyMode == ProxyMode.AETHER_MASQUE && context != null) {
+            if (!AetherManager.isPortOpen(aetherPort)) {
+                AetherManager.ensureStarted(context, aetherPort)
+            }
+        }
+
         val testStream = "https://musichls.persiana.live/hls/stream.m3u8"
         val start = System.currentTimeMillis()
 
         try {
             val clientBuilder = OkHttpClient.Builder()
-                .connectTimeout(6, TimeUnit.SECONDS)
-                .readTimeout(6, TimeUnit.SECONDS)
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
                 .followRedirects(true)
                 .followSslRedirects(true)
 
@@ -144,13 +157,18 @@ object ProxyConfig {
             client.newCall(request).execute().use { response ->
                 val duration = System.currentTimeMillis() - start
                 if (response.isSuccessful) {
-                    Pair(true, "Connected successfully (${duration}ms)")
+                    Pair(true, "اتصال موفق ($duration ms)")
                 } else {
-                    Pair(false, "Server returned HTTP ${response.code}")
+                    Pair(false, "پاسخ سرور: HTTP ${response.code}")
                 }
             }
         } catch (e: Exception) {
-            Pair(false, "Connection failed: ${e.localizedMessage ?: e.javaClass.simpleName}")
+            val msg = if (proxyMode == ProxyMode.AETHER_MASQUE && !AetherManager.isPortOpen(aetherPort)) {
+                "سرویس Aether فعال نیست (پورت $aetherPort باز نشد)"
+            } else {
+                "خطای اتصال: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            }
+            Pair(false, msg)
         }
     }
 }
