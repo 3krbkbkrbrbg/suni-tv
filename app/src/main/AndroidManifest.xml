@@ -9,9 +9,18 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Android TV / Leanback support -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
     <application
         android:name=".FamelackApp"
         android:allowBackup="true"
+        android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
@@ -23,9 +32,11 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
 
+        <!-- Entry point: Welcome/Twitter promo screen (shows on first launch) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".WelcomeActivity"
             android:exported="true"
+            android:banner="@drawable/tv_banner"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|locale|layoutDirection|fontScale"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Famelack">
@@ -33,6 +44,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:banner="@drawable/tv_banner"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|locale|layoutDirection|fontScale"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Famelack">
         </activity>
 
         <service

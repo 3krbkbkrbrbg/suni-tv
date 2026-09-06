@@ -11,8 +11,8 @@ android {
         applicationId = "com.sunitv.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 15
-        versionName = "2.1.0"
+        versionCode = 16
+        versionName = "2.2.0"
         resourceConfigurations += listOf("en")
         vectorDrawables { useSupportLibrary = true }
         ndk {
@@ -109,6 +109,9 @@ dependencies {
 
     // AndroidX WebKit — for WebView proxy support (YouTube via FCAE)
     implementation("androidx.webkit:webkit:1.10.0")
+
+    // Android TV / Leanback support
+    implementation("androidx.leanback:leanback:1.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
