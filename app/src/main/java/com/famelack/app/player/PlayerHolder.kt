@@ -165,32 +165,17 @@ object PlayerHolder {
         }
         ensureProxyCollector()
 
-        // If FCAE VPN proxy is enabled but SOCKS port not yet open -> wait for it, don't fire immediate failing request
+        // Start FCAE in background if needed, but NEVER block playback — play direct immediately, collector will re-route when ready
         if (ProxyConfig.isProxyEnabled && ProxyConfig.proxyMode == ProxyMode.FCAE_VPN && !FcaeVpnManager.isPortOpen(ProxyConfig.fcaePort)) {
-            _lastErrorFlow.value = "در حال اتصال پروکسی FCAE... (به محض اتصال، پخش خودکار آغاز می‌شود)"
-            // Fire VPN start in background; collector above will auto-replay when ready
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                val ok = FcaeVpnManager.start(context, ProxyConfig.fcaePort)
-                if (!ok) {
-                    // VPN failed -> fallback to direct if allowed, or surface error with retry
-                    if (ProxyConfig.autoFallbackToDirect) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            isUsingProxyForCurrent = false
-                            _lastErrorFlow.value = "پروکسی وصل نشد — تلاش با اتصال مستقیم..."
-                            playUrlInternal(context, url, title)
-                        }
-                    } else {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            _lastErrorFlow.value = FcaeVpnManager.statusFlow.value.ifBlank { "پروکسی وصل نشد" }
-                        }
-                    }
-                }
-                // on success, the statusFlow collector will handle replay
+                FcaeVpnManager.start(context, ProxyConfig.fcaePort)
+                // on success, collector auto-replays via proxy if needed
             }
-            return
+            // If proxy not yet open, PlaybackService DataSource will transparently use direct (no SOCKS), so this play succeeds instantly
         }
 
         isUsingProxyForCurrent = ProxyConfig.isProxyEnabled
+        // Only use proxy URL/relay if it actually changes the URL; SOCKS routing is done at DataSource level and gated by isPortOpen there
         val targetUrl = ProxyConfig.getEffectiveUrl(url)
         playUrlInternal(context, targetUrl, title)
     }

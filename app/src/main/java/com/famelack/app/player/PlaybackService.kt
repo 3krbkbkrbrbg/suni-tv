@@ -39,7 +39,17 @@ class PlaybackService : MediaSessionService() {
                     .followRedirects(true)
                     .followSslRedirects(true)
 
-                val socketProxy = ProxyConfig.getSocketProxy()
+                // Only route through SOCKS/HTTP if the local port is actually open — otherwise direct is 10x faster and avoids 15s timeout
+                val socketProxy = ProxyConfig.getSocketProxy()?.takeIf {
+                    val open = when (ProxyConfig.proxyMode) {
+                        ProxyMode.FCAE_VPN -> FcaeVpnManager.isPortOpen(ProxyConfig.fcaePort)
+                        ProxyMode.LOCAL_SOCKS5 -> FcaeVpnManager.isPortOpen(ProxyConfig.localSocksPort)
+                        ProxyMode.LOCAL_HTTP -> FcaeVpnManager.isPortOpen(ProxyConfig.localHttpPort)
+                        else -> true
+                    }
+                    if (!open) android.util.Log.w(TAG, "Proxy ${ProxyConfig.proxyMode} port not open — using direct for this request")
+                    open
+                }
                 if (socketProxy != null) {
                     okHttpClientBuilder.proxy(socketProxy)
                 }
