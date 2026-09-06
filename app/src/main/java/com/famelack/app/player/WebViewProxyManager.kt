@@ -1,7 +1,7 @@
 package com.famelack.app.player
 
 import android.util.Log
-import androidx.webkit.ProxyConfig
+import androidx.webkit.ProxyConfig as WebkitProxyConfig
 import androidx.webkit.ProxyController
 import androidx.webkit.WebViewFeature
 
@@ -36,7 +36,7 @@ object WebViewProxyManager {
         }
 
         try {
-            val config = ProxyConfig.Builder()
+            val config = WebkitProxyConfig.Builder()
                 .addProxyRule(rule)
                 .addDirect()
                 .build()
